@@ -1,0 +1,10 @@
+[project]
+name = "dalikam"
+version = "0.1.0"
+description = "GUI for retinal OCT image segmentation"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "nibabel>=5.4.0",
+    "pyqt6>=6.10.2",
+]

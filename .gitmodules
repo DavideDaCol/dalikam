@@ -1,0 +1,3 @@
+[submodule "backend/OCT_segmentation"]
+	path = backend/OCT_segmentation
+	url = git@github.com:Roman-Simone/OCT_segmentation.git
