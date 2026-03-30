@@ -1,4 +1,5 @@
 from typing import override
+from dalikam.presentation.viewmodel.landingViewModel import landingVM
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QPushButton, QStackedLayout, QVBoxLayout, QHBoxLayout, QWidget
 from PyQt6.QtGui import QPaintEvent, QPainter, QPixmap
@@ -46,8 +47,9 @@ class LandingPage(QWidget):
     allows to move to other pages. 
     """
 
-    def __init__(self):
+    def __init__(self, vm: landingVM):
         super().__init__()
+        self.viewmodel: landingVM = vm
 
         background = BackgroundWidget(path="./assets/bg.png")
 
@@ -65,6 +67,12 @@ class LandingPage(QWidget):
         visualizer_btn = QPushButton("start")
         settings_btn = QPushButton("settings")
         exit_btn = QPushButton("exit")
+
+        settings_btn.setCheckable(True)
+
+        # lambda here is needed so arguments can be passed without the function being
+        # executed immediately.
+        _ = settings_btn.clicked.connect(lambda: self.viewmodel.debugBtnPress("settings"))
 
         button_layer.addWidget(visualizer_btn)
         button_layer.addWidget(settings_btn)
