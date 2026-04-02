@@ -67,17 +67,16 @@ class LandingPage(QWidget):
         # TODO move these magic numbers to a const or similar solutions
         button_layer.setSpacing(20)
 
-        visualizer_btn = QPushButton("start")
+        file_btn = QPushButton("start")
         settings_btn = QPushButton("settings")
         exit_btn = QPushButton("exit")
 
         settings_btn.setCheckable(True)
 
-        # lambda here is needed so arguments can be passed without the function being
-        # executed immediately.
-        _ = settings_btn.clicked.connect(self._viewmodel.debugBtnPress)
+        _ = settings_btn.clicked.connect(self._viewmodel.debug_btn_press)
+        _ = file_btn.clicked.connect(self._viewmodel.start_clicked)
 
-        button_layer.addWidget(visualizer_btn)
+        button_layer.addWidget(file_btn)
         button_layer.addWidget(settings_btn)
         button_layer.addWidget(exit_btn)
 
@@ -101,5 +100,5 @@ class LandingPage(QWidget):
 
         self.setLayout(top_layer)
 
-    def printSettings(self, settings: dict):
+    def printSettings(self, settings: dict[str,str]):
         print(f"in the view settings were received as: {settings}")
