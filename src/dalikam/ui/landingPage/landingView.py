@@ -1,5 +1,5 @@
 from typing import override
-from dalikam.presentation.viewmodel.landingViewModel import landingVM
+from dalikam.ui.landingPage.landingViewModel import landingVM
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QPushButton, QStackedLayout, QVBoxLayout, QHBoxLayout, QWidget
 from PyQt6.QtGui import QPaintEvent, QPainter, QPixmap
@@ -49,7 +49,10 @@ class LandingPage(QWidget):
 
     def __init__(self, vm: landingVM):
         super().__init__()
-        self.viewmodel: landingVM = vm
+        self._viewmodel: landingVM = vm
+
+        # connect the slots from the viewModel to the view
+        self._viewmodel.settingsAvailable.connect(self.printSettings)
 
         background = BackgroundWidget(path="./assets/bg.png")
 
@@ -72,7 +75,7 @@ class LandingPage(QWidget):
 
         # lambda here is needed so arguments can be passed without the function being
         # executed immediately.
-        _ = settings_btn.clicked.connect(lambda: self.viewmodel.debugBtnPress("settings"))
+        _ = settings_btn.clicked.connect(self._viewmodel.debugBtnPress)
 
         button_layer.addWidget(visualizer_btn)
         button_layer.addWidget(settings_btn)
@@ -97,3 +100,6 @@ class LandingPage(QWidget):
         _ = top_layer.addWidget(menu_widget)
 
         self.setLayout(top_layer)
+
+    def printSettings(self, settings: dict):
+        print(f"in the view settings were received as: {settings}")
