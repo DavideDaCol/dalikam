@@ -1,5 +1,5 @@
 from typing import override
-from dalikam.ui.landingPage.landingViewModel import landingVM
+from dalikam.ui.landingPage.landingVM import landingVM
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QPushButton, QStackedLayout, QVBoxLayout, QHBoxLayout, QWidget
 from PyQt6.QtGui import QPaintEvent, QPainter, QPixmap
