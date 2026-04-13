@@ -23,7 +23,7 @@ class MainWindow(QMainWindow):
 
         # Initialize all view models
         self.landingViewModel: landingVM = landingVM(self._landingModel, self._router) 
-        self.fileViewModel: FileViewModel = FileViewModel()
+        self.fileViewModel: FileViewModel = FileViewModel(self._fileModel, self._router)
 
         _ = self._router.routeChange.connect(self.change_page)
 
