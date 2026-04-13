@@ -6,9 +6,21 @@ QLabel {
     color: #d5d5d5;
 }
 
+QLabel#mainTitle {
+    font-size: 48px;
+    font-weight: bold;
+    color: #d5d5d5;
+}
+
+QLabel#title {
+    font-size: 32px;
+    font-weight: bold;
+    color: #d5d5d5;
+}
+
 QPushButton {
     background-color: #0d0d0c;
-    color: #fff;
+    color: #d5d5d5;
     font-weight: 600;
     border-radius: 8px;
     border: 1px solid #0d0d0c;

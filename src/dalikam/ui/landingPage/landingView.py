@@ -59,8 +59,7 @@ class LandingPage(QWidget):
         menu_layer = QVBoxLayout()
 
         title = QLabel("Dalikam")
-        # TODO set up an actual QSS file for styling
-        title.setStyleSheet("font-size: 48px; font-weight: bold; color: #ffffff;")
+        title.setObjectName("mainTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         button_layer = QHBoxLayout()
