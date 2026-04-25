@@ -1,7 +1,7 @@
 from typing import override
 from dalikam.ui.landingPage.landingVM import landingVM
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QLabel, QPushButton, QStackedLayout, QVBoxLayout, QHBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QHBoxLayout, QWidget
 from PyQt6.QtGui import QPaintEvent, QPainter, QPixmap
 
 
@@ -70,10 +70,9 @@ class LandingPage(QWidget):
         settings_btn = QPushButton("settings")
         exit_btn = QPushButton("exit")
 
-        settings_btn.setCheckable(True)
-
         _ = settings_btn.clicked.connect(self._viewmodel.debug_btn_press)
         _ = file_btn.clicked.connect(self._viewmodel.start_clicked)
+        exit_btn.clicked.connect(QApplication.quit)
 
         button_layer.addWidget(file_btn)
         button_layer.addWidget(settings_btn)

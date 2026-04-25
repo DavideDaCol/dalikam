@@ -16,6 +16,10 @@ class FileViewModel(QObject):
 
     def path_validity_check(self,path: str) -> bool:
             return os.path.exists(path)
+    
+    def path_list_update(self, path: str) -> None:
+        self._model.insert_path(path)
+        self.page_loaded()
 
     def page_loaded(self):
         paths = self._model.get_all_paths()

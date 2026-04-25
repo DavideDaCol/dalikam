@@ -1,7 +1,8 @@
 from typing import override
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget, QVBoxLayout
+from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget, QVBoxLayout
 from PyQt6.QtGui import QShowEvent
 from PyQt6.QtCore import Qt
+from dalikam.ui.filePage.fileModel import FileInfo
 from dalikam.ui.filePage.fileVM import FileViewModel
 
 class FileSelectionView(QWidget):
@@ -12,6 +13,7 @@ class FileSelectionView(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self._viewmodel.no_saved_paths.connect(self.empty_path_list)
+        self._viewmodel.paths_available.connect(self.fill_paths)
 
         layout = QVBoxLayout()
 
@@ -23,7 +25,8 @@ class FileSelectionView(QWidget):
 
         btn_row = QHBoxLayout()
         back_btn = QPushButton("Back")
-        open_btn = QPushButton("Open")
+        open_btn = QPushButton("New File")
+        open_btn.clicked.connect(self.path_navigation_request)
         btn_row.addWidget(back_btn)
         btn_row.addWidget(open_btn)
 
@@ -38,5 +41,51 @@ class FileSelectionView(QWidget):
     def showEvent(self, a0: QShowEvent | None) -> None:
         self._viewmodel.page_loaded()
 
+    def path_navigation_request(self) -> None:
+        selection_result = QFileDialog.getOpenFileName(self, "Choose a file", "/home", "Imaging Files (*.nii *.nii.gz)")
+        new_file = selection_result[0]
+        print(f"selected file: {new_file}")
+        if new_file:
+            if self._viewmodel.path_validity_check(new_file):
+                self._viewmodel.path_list_update(new_file)
+            else:
+                error_box = QMessageBox(self)
+                error_box.setIcon(QMessageBox.Icon.Warning)
+                error_box.setText("Path is not valid")
+                error_box.setInformativeText(f"the selected path '{new_file}' does not seem to exist.")
+                res = error_box.exec()
+                print(f"exit status {res}")
+
     def empty_path_list(self) -> None:
         self.path_layout.addWidget(QLabel("no files saved"))
+
+    def file_factory(self, file: FileInfo) -> QHBoxLayout:
+        file_entry = QHBoxLayout()
+        icon_placeholder = QLabel("icon")
+        file_name = QLabel(file.name)
+        file_path = QLabel(file.path)
+        file_mod_date = QLabel(f"{file.last_mod_date}")
+        file_creat_date = QLabel(f"{file.creation_date}")
+
+        file_entry.addWidget(icon_placeholder)
+        file_entry.addWidget(file_name)
+        file_entry.addStretch()
+        file_entry.addWidget(file_path)
+        file_entry.addStretch()
+        file_entry.addWidget(file_mod_date)
+        file_entry.addWidget(file_creat_date)
+        return file_entry
+
+    def fill_paths(self, file_info: list[FileInfo]) -> None:
+        for i in reversed(range(self.path_layout.count())):
+            item = self.path_layout.takeAt(i)
+            if item is not None:
+                inner_widget = item.widget()
+                if inner_widget is not None:
+                    inner_widget.deleteLater()
+                    
+        for file in file_info:
+            entry_layout = self.file_factory(file)
+            self.path_layout.addLayout(entry_layout)
+        
+        # TODO add file opening logic

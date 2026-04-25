@@ -16,6 +16,7 @@ QLabel#title {
     font-size: 32px;
     font-weight: bold;
     color: #d5d5d5;
+    margin: 24px;
 }
 
 QPushButton {
@@ -32,4 +33,8 @@ QPushButton {
 QPushButton:hover {
     background-color: #000000;
     border: 3px solid #9ac3fe;
+}
+
+QMessageBox {
+    background-color: #1e1f22
 }
