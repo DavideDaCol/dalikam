@@ -13,9 +13,11 @@ class Router(QObject):
     def register_routes(self):
         self.page_names.update({
             "landing": 0,
-            "file": 1 
+            "file": 1,
+            "viewer": 2
         })
 
+    # TODO probably get rid of this, unless we want to dynamically add pages
     def register_route(self, name: str, index: int):
         self.page_names.update({name: index})
 

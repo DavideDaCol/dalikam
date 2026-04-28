@@ -5,10 +5,10 @@ from PyQt6.QtCore import QObject, pyqtSignal
 class landingVM(QObject):
     settingsAvailable:pyqtSignal = pyqtSignal(dict)
 
-    def __init__(self, model: LandingModel, navigator: Router):
+    def __init__(self, model: LandingModel, router: Router):
         super().__init__()
         self._model: LandingModel = model
-        self._navigator: Router = navigator
+        self._router: Router = router
         print("landing page view model was initalized")
 
     def debug_btn_press(self):
@@ -18,4 +18,4 @@ class landingVM(QObject):
 
     def start_clicked(self):
         print("start button has been clicked")
-        self._navigator.navigate("file")
+        self._router.navigate("file")

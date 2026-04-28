@@ -21,6 +21,10 @@ class FileViewModel(QObject):
         self._model.insert_path(path)
         self.page_loaded()
 
+    def file_chosen(self) -> None:
+        print("file has been chosen, starting viewer...")
+        self._router.navigate("viewer")
+
     def page_loaded(self):
         paths = self._model.get_all_paths()
         if len(paths) == 0:

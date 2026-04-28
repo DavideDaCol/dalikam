@@ -1,9 +1,36 @@
 from typing import override
 from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget, QVBoxLayout
 from PyQt6.QtGui import QShowEvent
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from dalikam.ui.filePage.fileModel import FileInfo
 from dalikam.ui.filePage.fileVM import FileViewModel
+
+class FileEntryWidget(QWidget):
+    clicked = pyqtSignal()
+
+    def __init__(self, file: FileInfo):
+        super().__init__()
+        self.file = file
+
+        layout = QHBoxLayout(self)
+
+        icon_placeholder = QLabel("icon")
+        file_name = QLabel(file.name)
+        file_path = QLabel(file.path)
+        file_mod_date = QLabel(f"{file.last_mod_date}")
+        file_creat_date = QLabel(f"{file.creation_date}")
+
+        layout.addWidget(icon_placeholder)
+        layout.addWidget(file_name)
+        layout.addStretch()
+        layout.addWidget(file_path)
+        layout.addStretch()
+        layout.addWidget(file_mod_date)
+        layout.addWidget(file_creat_date)
+
+    def mousePressEvent(self, event):
+        self.clicked.emit()
+        super().mousePressEvent(event)
 
 class FileSelectionView(QWidget):
     def __init__(self, vm: FileViewModel):
@@ -74,6 +101,7 @@ class FileSelectionView(QWidget):
         file_entry.addStretch()
         file_entry.addWidget(file_mod_date)
         file_entry.addWidget(file_creat_date)
+
         return file_entry
 
     def fill_paths(self, file_info: list[FileInfo]) -> None:
@@ -85,7 +113,10 @@ class FileSelectionView(QWidget):
                     inner_widget.deleteLater()
                     
         for file in file_info:
-            entry_layout = self.file_factory(file)
-            self.path_layout.addLayout(entry_layout)
+            entry_widget = FileEntryWidget(file)
+
+            entry_widget.clicked.connect(self._viewmodel.file_chosen)
+
+            self.path_layout.addWidget(entry_widget)
         
         # TODO add file opening logic

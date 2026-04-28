@@ -7,6 +7,7 @@ from dalikam.ui.landingPage.landingModel import LandingModel
 from dalikam.ui.filePage.fileView import FileSelectionView
 from dalikam.ui.filePage.fileModel import FileSelectionModel
 from dalikam.ui.filePage.fileVM import FileViewModel
+from dalikam.ui.viewerPage.viewerView import viewerView
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -30,11 +31,13 @@ class MainWindow(QMainWindow):
         # Initialize all views
         hero_section = LandingPage(self.landingViewModel)
         file_selection = FileSelectionView(self.fileViewModel)
+        viewer_section = viewerView()
 
         # Create the main container of the app
         self.main_container: QStackedWidget = QStackedWidget()
         _ = self.main_container.addWidget(hero_section)
         _ = self.main_container.addWidget(file_selection)
+        _ = self.main_container.addWidget(viewer_section)
         self.setCentralWidget(self.main_container)
 
     def change_page(self, index: int):
