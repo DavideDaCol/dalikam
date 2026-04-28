@@ -1,12 +1,14 @@
-from sqlite3 import Connection
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget
 from dalikam.router.router import Router
 from dalikam.ui.landingPage.landingView import LandingPage
 from dalikam.ui.landingPage.landingVM import landingVM
 from dalikam.ui.landingPage.landingModel import LandingModel
 from dalikam.ui.filePage.fileView import FileSelectionView
-from dalikam.ui.filePage.fileModel import FileSelectionModel
+from dalikam.ui.filePage.fileModel import FileInfo, FileSelectionModel
 from dalikam.ui.filePage.fileVM import FileViewModel
+from dalikam.ui.viewerPage import viewerVM
+from dalikam.ui.viewerPage.viewerModel import viewerModel
+from dalikam.ui.viewerPage.viewerVM import ViewerVM
 from dalikam.ui.viewerPage.viewerView import viewerView
 
 class MainWindow(QMainWindow):
@@ -18,6 +20,7 @@ class MainWindow(QMainWindow):
         # Initialize all models
         self._landingModel: LandingModel = LandingModel()
         self._fileModel: FileSelectionModel = FileSelectionModel()
+        self._viewerModel: viewerModel = viewerModel()
 
         # Initialize app page router
         self._router: Router = Router()
@@ -25,13 +28,14 @@ class MainWindow(QMainWindow):
         # Initialize all view models
         self.landingViewModel: landingVM = landingVM(self._landingModel, self._router) 
         self.fileViewModel: FileViewModel = FileViewModel(self._fileModel, self._router)
+        self.viewerViewModel: ViewerVM = ViewerVM(self._viewerModel, self._router)
 
         _ = self._router.routeChange.connect(self.change_page)
 
         # Initialize all views
         hero_section = LandingPage(self.landingViewModel)
         file_selection = FileSelectionView(self.fileViewModel)
-        viewer_section = viewerView()
+        viewer_section = viewerView(self.viewerViewModel)
 
         # Create the main container of the app
         self.main_container: QStackedWidget = QStackedWidget()
@@ -40,6 +44,10 @@ class MainWindow(QMainWindow):
         _ = self.main_container.addWidget(viewer_section)
         self.setCentralWidget(self.main_container)
 
-    def change_page(self, index: int):
+    def change_page(self, index: int, context: FileInfo | None):
         print(f"got page navigation event, switching to index {index}")
         self.main_container.setCurrentIndex(index)
+
+        # CASE: passing data from the file model to the viewer model
+        if index == self._router.page_names["viewer"] and context:
+            self.viewerViewModel.set_file(context)

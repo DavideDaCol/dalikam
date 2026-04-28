@@ -3,7 +3,7 @@ import os
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from dalikam.router.router import Router
-from dalikam.ui.filePage.fileModel import FileSelectionModel
+from dalikam.ui.filePage.fileModel import FileInfo, FileSelectionModel
 
 class FileViewModel(QObject):
     no_saved_paths: pyqtSignal = pyqtSignal()
@@ -21,9 +21,9 @@ class FileViewModel(QObject):
         self._model.insert_path(path)
         self.page_loaded()
 
-    def file_chosen(self) -> None:
+    def file_chosen(self, context: FileInfo | None = None) -> None:
         print("file has been chosen, starting viewer...")
-        self._router.navigate("viewer")
+        self._router.navigate("viewer", context)
 
     def page_loaded(self):
         paths = self._model.get_all_paths()

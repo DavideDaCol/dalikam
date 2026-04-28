@@ -1,16 +1,17 @@
 from typing import override
+from functools import partial
 from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget, QVBoxLayout
-from PyQt6.QtGui import QShowEvent
+from PyQt6.QtGui import QMouseEvent, QShowEvent
 from PyQt6.QtCore import Qt, pyqtSignal
 from dalikam.ui.filePage.fileModel import FileInfo
 from dalikam.ui.filePage.fileVM import FileViewModel
 
 class FileEntryWidget(QWidget):
-    clicked = pyqtSignal()
+    clicked: pyqtSignal = pyqtSignal()
 
     def __init__(self, file: FileInfo):
         super().__init__()
-        self.file = file
+        self.file: FileInfo = file
 
         layout = QHBoxLayout(self)
 
@@ -28,9 +29,10 @@ class FileEntryWidget(QWidget):
         layout.addWidget(file_mod_date)
         layout.addWidget(file_creat_date)
 
-    def mousePressEvent(self, event):
+    @override
+    def mousePressEvent(self, a0: QMouseEvent | None):
         self.clicked.emit()
-        super().mousePressEvent(event)
+        super().mousePressEvent(a0)
 
 class FileSelectionView(QWidget):
     def __init__(self, vm: FileViewModel):
@@ -115,8 +117,8 @@ class FileSelectionView(QWidget):
         for file in file_info:
             entry_widget = FileEntryWidget(file)
 
-            entry_widget.clicked.connect(self._viewmodel.file_chosen)
+            print(f"making entry widget with path {file.path}")
+
+            entry_widget.clicked.connect(partial(self._viewmodel.file_chosen, file))
 
             self.path_layout.addWidget(entry_widget)
-        
-        # TODO add file opening logic
