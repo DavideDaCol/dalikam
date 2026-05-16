@@ -1,40 +1,67 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from nibabel.filebasedimages import FileBasedImage
+from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel
 
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
+from dalikam.rendering.visualizer import ThreeDview
 
-from pyvistaqt import QtInteractor
-from  pyvista import BaseReader, DICOMReader
+import vtk
+
+
+class SideMenu(QWidget):
+    def __init__(self, labels: list[str] | None) -> None:
+        super().__init__()
+        self.menulayout: QVBoxLayout = QVBoxLayout()
+        self.setLayout(self.menulayout)
+        self.menulayout.addWidget(QLabel("this is where the label selector will be"))
+        
+        self.label_layout: QVBoxLayout = QVBoxLayout()
+        self.menulayout.addLayout(self.label_layout)
+
+        self.menulayout.addStretch()
+        self.menulayout.addWidget(QPushButton("Axial View"))
+        self.menulayout.addWidget(QPushButton("Coronal View"))
+        self.menulayout.addWidget(QPushButton("Saggital View"))
+        self.menulayout.addWidget(QPushButton("3D View"))
+
+    def clear_layout(self, layout: QLayout):
+        while layout.count():
+            item = layout.takeAt(0)
+            if item is not None:
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+
+    def draw_labels(self, labels: list[str]):
+        self.clear_layout(self.label_layout)
+        for label in labels:
+            self.label_layout.addWidget(QLabel(label))
+
 
 class viewerView(QWidget):
 
     def __init__(self, vm: ViewerVM) -> None:
         super().__init__()
         self._viewmodel: ViewerVM = vm
-        self.viewlayout: QVBoxLayout = QVBoxLayout()
-        self.draw_loader()
-        _ = self._viewmodel.draw_file.connect(self.plot_file)
 
-    def draw_loader(self):
-        title = QLabel("Loading in progress...")
-        title.setStyleSheet("color: #000000;")
-        self.viewlayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.viewlayout.addWidget(title)
+        self.setObjectName("viewerPage")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        # layout to hold everything in place
+        self.viewlayout: QHBoxLayout = QHBoxLayout()
         self.setLayout(self.viewlayout)
 
-    def plot_file(self, data: BaseReader | DICOMReader):
-        print(f"drawing {data.path}")
+        # custom 3D viewer
+        self.threed: ThreeDview = ThreeDview()
+        self.side_menu: SideMenu = SideMenu(None)
 
-        for i in reversed(range(self.viewlayout.count())):
-            item = self.viewlayout.takeAt(i)
-            if item is not None:
-                inner_widget = item.widget()
-                if inner_widget is not None:
-                    inner_widget.deleteLater()
+        self.viewlayout.addWidget(self.side_menu, 1)
+        self.viewlayout.addWidget(self.threed, 3)
+        _ = self._viewmodel.draw_file.connect(self.plot_file)
+        _ = self._viewmodel.labels_changed.connect(self.side_menu.draw_labels)
 
-        title = QLabel("this is what you get if the thing loads")
-        plotter = QtInteractor()
-        _ = plotter.add_volume(data.read(), opacity="linear")
-        self.viewlayout.addWidget(title)
-        self.viewlayout.addWidget(plotter)
+        self._viewmodel.testlabels()
+
+    # Starts from the (loaded) raw data and displays it as the 3D model
+    def plot_file(self, data: vtk.vtkNIFTIImageReader):
+        print(f"drawing {data.descriptive_name}")
+        self.threed.load_model(data)

@@ -6,7 +6,6 @@ from dalikam.ui.landingPage.landingModel import LandingModel
 from dalikam.ui.filePage.fileView import FileSelectionView
 from dalikam.ui.filePage.fileModel import FileInfo, FileSelectionModel
 from dalikam.ui.filePage.fileVM import FileViewModel
-from dalikam.ui.viewerPage import viewerVM
 from dalikam.ui.viewerPage.viewerModel import viewerModel
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
 from dalikam.ui.viewerPage.viewerView import viewerView
@@ -45,6 +44,20 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.main_container)
 
     def change_page(self, index: int, context: FileInfo | None):
+        """
+        Connects the router component to the main page widget and changes the visualized
+        widget whenever instructed. It relies on occasional context to send information
+        to underlying widgets, such as paths or settings.
+
+        Args
+        ----------
+        index: int
+            the number corresponding to the order of the widget in the QStackWidget that acts as
+            the main container
+        context: FileInfo | None
+            additional context used by the viewer section to determine which file was chosen
+            in the file selection page
+        """
         print(f"got page navigation event, switching to index {index}")
         self.main_container.setCurrentIndex(index)
 

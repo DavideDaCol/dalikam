@@ -1,5 +1,9 @@
-QWidget#filePage {
+QWidget#filePage, QWidget#viewerPage {
     background-color: #1e1f22;
+}
+
+QWidget#threeD{
+    background-color: #000000;
 }
 
 QLabel {
