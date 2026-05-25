@@ -19,3 +19,4 @@ package-dir = {"" = "src"}
 [project.scripts]
 # uv run start-app
 start-app = "dalikam.main:main"
+setup = "dalikam.tools.setup_backend:main"
