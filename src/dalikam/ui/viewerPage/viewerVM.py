@@ -23,4 +23,4 @@ class ViewerVM(QObject):
             self.labels_changed.emit(labels)
 
     def testlabels(self):
-        self.labels_changed.emit(["label one", "label two", "concas"])
+        self.labels_changed.emit(["label one", "label two", "label three"])

@@ -1,7 +1,8 @@
 from datetime import date, datetime
 import os
-from typing import cast
 from PyQt6.QtCore import QSettings
+import logging
+logger = logging.getLogger(__name__)
 
 class FileInfo:
     path: str
@@ -36,8 +37,24 @@ class FileSelectionModel:
     Paths are persistent: they are remembered even if the user closes the app.
     """
     def get_all_paths(self) -> list[FileInfo]:
-        # TODO anything cleaner than this cast? It shouldn't fail on its own but it's ugly
-        return cast(list[FileInfo], self.known_paths.value("paths", [], list))
+
+        old_paths:list[str] = self.known_paths.value("paths", [], list)
+        valid_paths: list[FileInfo] = []
+        new_paths: list[str] = []
+
+        # Check if stored paths still exist
+        for path in old_paths:
+            if os.path.exists(path):
+                valid_paths.append(FileInfo(path))
+                new_paths.append(path)
+            else:
+                logger.info(f"deleting old path {path}")
+
+        if len(old_paths) != len(new_paths):
+            self.known_paths.setValue("paths", new_paths)
+
+        return valid_paths
+
 
     """
     saves the given `path` in the `known_paths` data structure.
@@ -45,15 +62,13 @@ class FileSelectionModel:
     """
     def insert_path(self, path: str):
         
-        current_paths: list[FileInfo] = self.get_all_paths()
+        current_paths: list[str] = self.known_paths.value("paths", [], list)
 
         # Avoid duplicate paths
-        for file in current_paths:
-            if file.path == path:
-                current_paths.remove(file)
+        if path in current_paths:
+            current_paths.remove(path)
 
-        new_info = FileInfo(path)
-        current_paths.insert(0, new_info)
+        current_paths.insert(0, path)
         # Keeps only the 5 most recent file paths
         current_paths = current_paths[:5]
 
