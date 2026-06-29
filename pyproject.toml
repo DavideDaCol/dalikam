@@ -7,6 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     "nibabel>=5.4.0",
     "pyqt6>=6.10.2",
+    "pyqt6-sip>=13.11.1",
     "vtk>=9.6.1",
 ]
 
