@@ -1,17 +1,73 @@
 from typing import override
 from enum import Enum
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QResizeEvent, QMouseEvent
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QSlider
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QResizeEvent
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QSlider, QHBoxLayout, QLabel
 
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
+
 
 # Enum to differentiate between the possible types of orientations
 class SlicerType(Enum):
     axial = "axial"
     coronal = "coronal"
     sagittal = "sagittal"
+
+
+"""Slider widget containing the image slice slider and its min/max values. 
+
+    Arranges the slider and its labels horizontally to let the user control the slice to view.
+    Each view has its own slider instance to keep the indexes separated. The values are updated
+    after every sliderMoved event (triggered by PyQt when the user moves the slider).
+
+    Attributes:
+        `slider_layout (QHBoxLayout)`: top-level layout holding the slider and labels
+        `slider (QSlider)`: slider component to control which slide of the OCT to view
+        `min_slice (QLabel)`: indicates the smallest possible slide index for the current
+                OCT scan
+        `max_slice (QLabel)`: indicates the biggest possible slide index for the current
+                OCT scan
+
+    Exported interface:
+        `update_slice()`: emits a PyQt signal containing the current position of the slider
+            such that the viewer can update its renderer.
+        `update_extent(layout: QLayout)`: replaces the default extent values with the ones 
+            exctracted from the NIfTI file
+
+    """
+
+
+class Slider(QWidget):
+    slider_moved = pyqtSignal(int)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.slider_layout = QHBoxLayout()
+        self.setLayout(self.slider_layout)
+
+        self.min_slice = QLabel("0")
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.setSliderPosition(50)
+        self.max_slice = QLabel("100")
+
+        self.slider_layout.addWidget(self.min_slice)
+        self.slider_layout.addWidget(self.slider)
+        self.slider_layout.addWidget(self.max_slice)
+
+        self.slider.sliderMoved.connect(self.update_slice)
+        # TODO add the methods to update the labels and the slider
+
+    def update_slice(self) -> None:
+        self.slider_moved.emit(self.slider.sliderPosition())
+
+    def update_extent(self, range_val: tuple[int, int]) -> None:
+        min_ext, max_ext = range_val
+        self.slider.setRange(min_ext, max_ext)
+        self.slider.setSliderPosition((max_ext + min_ext) // 2)
+        self.min_slice.setText(str(min_ext))
+        self.max_slice.setText(str(max_ext))
+
 
 class SliceView(QWidget):
     def __init__(self, orientation: SlicerType) -> None:
@@ -21,7 +77,7 @@ class SliceView(QWidget):
 
         self.orientation: SlicerType = orientation
 
-        self.ext_x, self.ext_y, self.ext_z = (0,0), (0,0), (0,0)
+        self.ext_x, self.ext_y, self.ext_z = (0, 0), (0, 0), (0, 0)
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -34,7 +90,7 @@ class SliceView(QWidget):
         decorator.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         frame_layout = QVBoxLayout()
-        frame_layout.setContentsMargins(2,2,2,2)
+        frame_layout.setContentsMargins(2, 2, 2, 2)
 
         decorator.setLayout(frame_layout)
         frame_layout.addWidget(self.vtkwidget)
@@ -69,52 +125,101 @@ class SliceView(QWidget):
 
         self.vtkwidget.GetRenderWindow().Render()
 
+        self.slider = Slider()
+        _ = self.slider.slider_moved.connect(self.change_slice)
+        layout.addWidget(self.slider)
+
     # visual flaire: add rounded corners
     @override
     def resizeEvent(self, a0: QResizeEvent | None):
         # This creates a rounded rectangle mask for the widget
         from PyQt6.QtGui import QRegion, QPainterPath
-        
+
         path = QPainterPath()
         # 15px matches your stylesheet's border-radius
         path.addRoundedRect(self.rect().toRectF(), 15, 15)
         self.setMask(QRegion(path.toFillPolygon().toPolygon()))
-        
+
         super().resizeEvent(a0)
+
+    '''
+    # render the vtk window for the hidden views once they are shown
+    @override
+    def showEvent(self, a0: QShowEvent | None) -> None:
+        self.vtkwidget.GetRenderWindow().Render()
+        super().showEvent(a0)
+    '''
 
     def load_model(self, data: vtk.vtkNIFTIImageReader):
         # map the data in the .nii file to a set of image slices
-            self.renderer.RemoveAllViewProps()
-            img_data = data.GetOutput()
-            extents = img_data.GetExtent()
-            self.ext_x = (extents[0], extents[1])
-            self.ext_y = (extents[2], extents[3])
-            self.ext_z = (extents[4], extents[5])
+        self.renderer.RemoveAllViewProps()
+        img_data = data.GetOutput()
+        extents = img_data.GetExtent()
+        self.ext_x = (extents[0], extents[1])
+        self.ext_y = (extents[2], extents[3])
+        self.ext_z = (extents[4], extents[5])
 
-            self.slicer.SetInputConnection(data.GetOutputPort())
+        selected_extent = (0, 0)
+        # TODO review this
+        if self.orientation == SlicerType.axial:
+            selected_extent = self.ext_z
+        elif self.orientation == SlicerType.coronal:
+            selected_extent = self.ext_y
+        else:
+            selected_extent = self.ext_x
 
-            mid_slice = self.ext_z[0] + (self.ext_z[1] - self.ext_z[0]) // 2
-            self.slicer.SetSliceNumber(mid_slice)
+        self.slider.update_extent(selected_extent)
+        self.slicer.SetInputConnection(data.GetOutputPort())
 
-            self.slice_actor.SetMapper(self.slicer)
+        mid_slice = selected_extent[0] + (selected_extent[1] - selected_extent[0]) // 2
+        self.slicer.SetSliceNumber(mid_slice)
 
-            r = img_data.GetScalarRange()
-            prop = self.slice_actor.GetProperty()
-            prop.SetColorWindow(r[1] - r[0])
-            prop.SetColorLevel((r[0] + r[1]) / 2)
+        self.slice_actor.SetMapper(self.slicer)
 
-            self.renderer.AddViewProp(self.slice_actor)
+        r = img_data.GetScalarRange()
+        prop = self.slice_actor.GetProperty()
+        prop.SetColorWindow(r[1] - r[0])
+        prop.SetColorLevel((r[0] + r[1]) / 2)
 
-            self.renderer.ResetCamera()
+        self.renderer.AddViewProp(self.slice_actor)
 
-            camera = self.renderer.GetActiveCamera()
-            camera.ParallelProjectionOn()
+        camera = self.renderer.GetActiveCamera()
+        camera.ParallelProjectionOn()
 
-            self.renderer.ResetCamera()
-            self.vtkwidget.GetRenderWindow().Render()
+        # find the center of the bounding box data
+        bounds = img_data.GetBounds()
+        center = [
+            (bounds[0] + bounds[1]) / 2.0,
+            (bounds[2] + bounds[3]) / 2.0,
+            (bounds[4] + bounds[5]) / 2.0
+        ]
+
+        # position the camera far enough away along the viewing axis
+        distance = 500.0
+
+        if self.orientation == SlicerType.axial:
+            # Looking down Z axis
+            camera.SetPosition(center[0], center[1], center[2] + distance)
+            camera.SetFocalPoint(center[0], center[1], center[2])
+            camera.SetViewUp(0, 1, 0)
+
+        elif self.orientation == SlicerType.coronal:
+            # Looking down Y axis
+            camera.SetPosition(center[0], center[1] - distance, center[2])
+            camera.SetFocalPoint(center[0], center[1], center[2])
+            camera.SetViewUp(0, 0, 1)
+
+        else:
+            # Looking down X axis
+            camera.SetPosition(center[0] + distance, center[1], center[2])
+            camera.SetFocalPoint(center[0], center[1], center[2])
+            camera.SetViewUp(0, 0, 1)
+
+        self.renderer.ResetCamera()
+        self.vtkwidget.GetRenderWindow().Render()
 
     # returns the minimum and maximum index for slices, according to the viewer's orientation
-    def get_extent(self) -> tuple[int,int]:
+    def get_extent(self) -> tuple[int, int]:
         if self.orientation == SlicerType.axial:
             return self.ext_z
         elif self.orientation == SlicerType.coronal:
@@ -127,6 +232,7 @@ class SliceView(QWidget):
     def change_slice(self, pos: int):
         self.slicer.SetSliceNumber(pos)
         self.vtkwidget.GetRenderWindow().Render()
+
 
 # Overrides the InteractorStyleImage class so that drag events do not change
 # values like image exposure or brightness. The event is converted to panning

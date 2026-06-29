@@ -1,10 +1,11 @@
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider
+from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget
 
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
 from dalikam.rendering.visualizer import SliceView, SlicerType
 
 import vtk
+
 
 class SideMenu(QWidget):
     """Side panel widget containing the view mode buttons and the segmentation label selector.
@@ -13,7 +14,6 @@ class SideMenu(QWidget):
     dynamic label display area above them. The label area is cleared and repopulated on
     each `draw_labels` call. Initial labels must be set via `draw_labels` after construction.
 
-    TODO: view mode buttons are not connected to any slot; clicking them has no effect.
     TODO: the initial label display is a static placeholder, actual logic is yet to be implemented.
 
     Attributes:
@@ -32,6 +32,8 @@ class SideMenu(QWidget):
             layout.
 
     """
+    # TODO separate this routing logic in separate file
+    orientation_changed = pyqtSignal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -43,10 +45,29 @@ class SideMenu(QWidget):
         self.menulayout.addLayout(self.label_layout)
 
         self.menulayout.addStretch()
-        self.menulayout.addWidget(QPushButton("Axial View"))
-        self.menulayout.addWidget(QPushButton("Coronal View"))
-        self.menulayout.addWidget(QPushButton("Sagittal View"))
+
+        self.axial_btn = QPushButton("Axial View")
+        self.axial_btn.clicked.connect(self.axial_btn_clicked)
+
+        self.coronal_btn = QPushButton("Coronal View")
+        self.coronal_btn.clicked.connect(self.coronal_btn_clicked)
+
+        self.sagittal_btn = QPushButton("Sagittal View")
+        self.sagittal_btn.clicked.connect(self.sagittal_btn_clicked)
+
+        self.menulayout.addWidget(self.axial_btn)
+        self.menulayout.addWidget(self.coronal_btn)
+        self.menulayout.addWidget(self.sagittal_btn)
         self.menulayout.addWidget(QPushButton("Run Segmentation"))
+
+    def axial_btn_clicked(self):
+        self.orientation_changed.emit(0)
+
+    def coronal_btn_clicked(self):
+        self.orientation_changed.emit(1)
+
+    def sagittal_btn_clicked(self):
+        self.orientation_changed.emit(2)
 
     def clear_layout(self, layout: QLayout):
         """Remove all widgets from the given layout and schedule them for deletion.
@@ -76,58 +97,6 @@ class SideMenu(QWidget):
         self.clear_layout(self.label_layout)
         for label in labels:
             self.label_layout.addWidget(QLabel(label))
-
-"""Slider widget containing the image slice slider and its min/max values. 
-
-    Arranges the slider and its labels horizontally to let the user control the slice to view.
-    Each view has its own slider instance to keep the indexes separated. The values are updated
-    after every sliderMoved event (triggered by PyQt when the user moves the slider).
-
-    Attributes:
-        `slider_layout (QHBoxLayout)`: top-level layout holding the slider and labels
-        `slider (QSlider)`: slider component to control which slide of the OCT to view
-        `min_slice (QLabel)`: indicates the smallest possible slide index for the current
-                OCT scan
-        `max_slice (QLabel)`: indicates the biggest possible slide index for the current
-                OCT scan
-
-    Exported interface:
-        `update_slice()`: emits a PyQt signal containing the current position of the slider
-            such that the viewer can update its renderer.
-        `update_extent(layout: QLayout)`: replaces the default extent values with the ones 
-            exctracted from the NIfTI file
-
-    """
-
-class Slider(QWidget):
-    slider_moved = pyqtSignal(int)
-    def __init__(self) -> None:
-        super().__init__()
-        self.slider_layout = QHBoxLayout()
-        self.setLayout(self.slider_layout)
-
-        self.min_slice = QLabel("0")
-        self.slider = QSlider(Qt.Orientation.Horizontal)
-        self.slider.setSliderPosition(50)
-        self.max_slice = QLabel("100")
-
-        self.slider_layout.addWidget(self.min_slice)
-        self.slider_layout.addWidget(self.slider)
-        self.slider_layout.addWidget(self.max_slice)
-
-        self.slider.sliderMoved.connect(self.update_slice)
-        # TODO add the methods to update the labels and the slider
-
-    def update_slice(self) -> None:
-        self.slider_moved.emit(self.slider.sliderPosition())
-
-    def update_extent(self, range_val: tuple[int, int]) -> None:
-        min_ext, max_ext = range_val
-        self.slider.setRange(min_ext, max_ext)
-        self.slider.setSliderPosition((max_ext + min_ext) // 2)
-        self.min_slice.setText(str(min_ext))
-        self.max_slice.setText(str(max_ext))
-
 
 
 class viewerView(QWidget):
@@ -171,22 +140,26 @@ class viewerView(QWidget):
         self.setLayout(self.viewlayout)
 
         # custom slice viewer
-        self.slices: SliceView = SliceView(SlicerType.axial)
+        self.slices = QStackedWidget()
+        self.slice_views = []
+        axial_slicer = SliceView(SlicerType.axial)
+        self.slice_views.append(axial_slicer)
+        coronal_slicer = SliceView(SlicerType.coronal)
+        self.slice_views.append(coronal_slicer)
+        sagittal_slicer = SliceView(SlicerType.sagittal)
+        self.slice_views.append(sagittal_slicer)
+
+        for view in self.slice_views:
+            self.slices.addWidget(view)
 
         # control menu
         self.side_menu: SideMenu = SideMenu()
-
-        self.slider = Slider()
-
-        self.sliceLayout: QVBoxLayout = QVBoxLayout()
-        self.sliceLayout.addWidget(self.slices)
-        self.sliceLayout.addWidget(self.slider)
+        _ = self.side_menu.orientation_changed.connect(self.change_view)
 
         self.viewlayout.addWidget(self.side_menu, 1)
-        self.viewlayout.addLayout(self.sliceLayout, 3)
+        self.viewlayout.addWidget(self.slices, 3)
 
         # connect all the signals
-        _ = self.slider.slider_moved.connect(self.update_slice_pos)
         _ = self._viewmodel.draw_file.connect(self.plot_file)
         _ = self._viewmodel.labels_changed.connect(self.side_menu.draw_labels)
 
@@ -201,15 +174,13 @@ class viewerView(QWidget):
                 ready for rendering. Caller must ensure Update() has been called.
         """
         print(f"drawing {data.descriptive_name}")
-        self.slices.load_model(data)
-        extent = self.slices.get_extent()
-        self.slider.update_extent(extent)
+        counter = 1
+        for view in self.slice_views:
+            view.load_model(data)
+            print(f"done loading data for viewer {counter}")
+            counter += 1
 
-    def update_slice_pos(self, pos: int) -> None:
-        """Send the captured slider value and send it to the VTK widget.
-
-        Args:
-            `pos (int)`: the new position captured from the slider.
-        """
-        print(f"sending value {pos} to vtk widget")
-        self.slices.change_slice(pos)
+    def change_view(self, page: int):
+        self.slices.setCurrentIndex(page)
+        active_view = self.slice_views[page]
+        active_view.vtkwidget.GetRenderWindow().Render()

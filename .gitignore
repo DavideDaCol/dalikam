@@ -16,3 +16,6 @@ dist/
 
 # OS junk
 .DS_Store
+
+# Micromamba download folder
+bin/
