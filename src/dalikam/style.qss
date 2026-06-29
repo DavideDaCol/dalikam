@@ -2,7 +2,7 @@ QWidget#filePage, QWidget#viewerPage {
     background-color: #1e1f22;
 }
 
-QWidget#threeD{
+QWidget#sliceView{
     background-color: #000000;
 }
 
