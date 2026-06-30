@@ -8,6 +8,8 @@ dependencies = [
     "nibabel>=5.4.0",
     "pyqt6>=6.10.2",
     "pyqt6-sip>=13.11.1",
+    "requests>=2.34.2",
+    "tqdm>=4.68.3",
     "vtk>=9.6.1",
 ]
 
