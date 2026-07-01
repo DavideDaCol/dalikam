@@ -103,6 +103,7 @@ class SliceView(QWidget):
         self.interactor.SetInteractorStyle(style)
 
         self.slice_actor = vtk.vtkImageSlice()
+        self.seg_slice_actor = vtk.vtkImageSlice()
 
         # TODO possibly move this to a dedicated rendering method
 
@@ -111,13 +112,17 @@ class SliceView(QWidget):
         self.vtkwidget.GetRenderWindow().AddRenderer(self.renderer)
 
         self.slicer: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
+        self.seg_mapper: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
 
         if orientation == SlicerType.axial:
             self.slicer.SetOrientationToZ()
+            self.seg_mapper.SetOrientationToZ()
         elif orientation == SlicerType.coronal:
             self.slicer.SetOrientationToY()
+            self.seg_mapper.SetOrientationToY()
         else:
             self.slicer.SetOrientationToX()
+            self.seg_mapper.SetOrientationToX()
 
         self.renderer.ResetCamera()
         self.vtkwidget.Initialize()
@@ -218,6 +223,55 @@ class SliceView(QWidget):
         self.renderer.ResetCamera()
         self.vtkwidget.GetRenderWindow().Render()
 
+    def add_segmentation(self) -> None:
+        loader = vtk.vtkNIFTIImageReader()
+        # TODO this is a test pipeline, it should refer to a hashmap instead of loading the same file
+        loader.SetFileName("/home/davide/Downloads/021_after.nii.gz")
+        loader.Update()
+
+        raw_data = loader.GetOutput()
+        extents = raw_data.GetExtent()
+
+        # check if extents match
+        if (extents[0], extents[1]) != self.ext_x:
+            print("extents on X axis do not match. terminating segmentation")
+            return
+        # TODO do this for all extents, maybe in separate function
+
+        selected_extent = (0, 0)
+        # TODO abstract this logic to a separate function
+        if self.orientation == SlicerType.axial:
+            selected_extent = self.ext_z
+        elif self.orientation == SlicerType.coronal:
+            selected_extent = self.ext_y
+        else:
+            selected_extent = self.ext_x
+
+        lut = vtk.vtkLookupTable()
+        lut.SetNumberOfTableValues(3)
+        lut.SetRange(0, 2)
+        lut.Build()
+
+        lut.SetTableValue(0, 0.0, 0.0, 0.0, 0.0)  # transparent
+        lut.SetTableValue(1, 1.0, 0.0, 0.0, 0.5)  # red
+        lut.SetTableValue(2, 0.0, 1.0, 0.0, 0.5)  # green
+
+        color_mapper = vtk.vtkImageMapToColors()
+        color_mapper.SetLookupTable(lut)
+        color_mapper.SetInputData(raw_data)
+        color_mapper.Update()
+
+        self.seg_mapper.SetInputConnection(color_mapper.GetOutputPort())
+        mid_seg_slice = selected_extent[0] + (selected_extent[1] - selected_extent[0]) // 2
+        self.seg_mapper.SetSliceNumber(mid_seg_slice)
+
+        self.seg_slice_actor.SetMapper(self.seg_mapper)
+
+        # self.seg_slice_actor.GetProperty().SetLookupTable(lut)
+        # self.seg_slice_actor.GetProperty().UseLookupTableScalarRangeOn()
+
+        self.renderer.AddViewProp(self.seg_slice_actor)
+
     # returns the minimum and maximum index for slices, according to the viewer's orientation
     def get_extent(self) -> tuple[int, int]:
         if self.orientation == SlicerType.axial:
@@ -231,6 +285,8 @@ class SliceView(QWidget):
     # This event is sent from the slider in the viewerView
     def change_slice(self, pos: int):
         self.slicer.SetSliceNumber(pos)
+        # TODO will this work if the segmentation isn't loaded in?
+        self.seg_mapper.SetSliceNumber(pos)
         self.vtkwidget.GetRenderWindow().Render()
 
 

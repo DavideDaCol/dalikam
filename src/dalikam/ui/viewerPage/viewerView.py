@@ -34,6 +34,7 @@ class SideMenu(QWidget):
     """
     # TODO separate this routing logic in separate file
     orientation_changed = pyqtSignal(int)
+    segmentation_requested = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -55,10 +56,13 @@ class SideMenu(QWidget):
         self.sagittal_btn = QPushButton("Sagittal View")
         self.sagittal_btn.clicked.connect(self.sagittal_btn_clicked)
 
+        self.segmentation_btn = QPushButton("TEST Segmentation")
+        self.segmentation_btn.clicked.connect(self.segmentation_btn_clicked)
+
         self.menulayout.addWidget(self.axial_btn)
         self.menulayout.addWidget(self.coronal_btn)
         self.menulayout.addWidget(self.sagittal_btn)
-        self.menulayout.addWidget(QPushButton("Run Segmentation"))
+        self.menulayout.addWidget(self.segmentation_btn)
 
     def axial_btn_clicked(self):
         self.orientation_changed.emit(0)
@@ -68,6 +72,9 @@ class SideMenu(QWidget):
 
     def sagittal_btn_clicked(self):
         self.orientation_changed.emit(2)
+
+    def segmentation_btn_clicked(self):
+        self.segmentation_requested.emit()
 
     def clear_layout(self, layout: QLayout):
         """Remove all widgets from the given layout and schedule them for deletion.
@@ -141,7 +148,7 @@ class viewerView(QWidget):
 
         # custom slice viewer
         self.slices = QStackedWidget()
-        self.slice_views = []
+        self.slice_views: list[SliceView] = []
         axial_slicer = SliceView(SlicerType.axial)
         self.slice_views.append(axial_slicer)
         coronal_slicer = SliceView(SlicerType.coronal)
@@ -155,6 +162,7 @@ class viewerView(QWidget):
         # control menu
         self.side_menu: SideMenu = SideMenu()
         _ = self.side_menu.orientation_changed.connect(self.change_view)
+        _ = self.side_menu.segmentation_requested.connect(self.load_slices)
 
         self.viewlayout.addWidget(self.side_menu, 1)
         self.viewlayout.addWidget(self.slices, 3)
@@ -184,3 +192,11 @@ class viewerView(QWidget):
         self.slices.setCurrentIndex(page)
         active_view = self.slice_views[page]
         active_view.vtkwidget.GetRenderWindow().Render()
+
+    def load_slices(self):
+        counter = 1
+        for view in self.slice_views:
+            view.add_segmentation()
+            view.vtkwidget.GetRenderWindow().Render()
+            print(f"done drawing labels for viewer {counter}")
+            counter += 1
