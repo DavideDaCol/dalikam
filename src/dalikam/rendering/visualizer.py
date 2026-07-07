@@ -10,6 +10,7 @@ from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from dalikam.backend.segmentation import SegmentationManager
+from dalikam.tools.utils import label_to_spread_color
 
 
 class SlicerType(Enum):
@@ -35,25 +36,7 @@ class SlicerType(Enum):
     """
 
 
-def _hsv_to_rgb(h: float, s: float, v: float) -> tuple[float, float, float]:
-    """Convert HSV to RGB. All values are in the range 0 - 1."""
-    i = int(h * 6)
-    f = h * 6 - i
-    p = v * (1 - s)
-    q = v * (1 - f * s)
-    t = v * (1 - (1 - f) * s)
-    i %= 6
-    if i == 0:
-        return v, t, p
-    if i == 1:
-        return q, v, p
-    if i == 2:
-        return p, v, t
-    if i == 3:
-        return p, q, v
-    if i == 4:
-        return t, p, v
-    return v, p, q
+
 
 
 class Slider(QWidget):
@@ -281,8 +264,7 @@ class SliceView(QWidget):
             if val == 0:
                 lut.SetTableValue(i, 0.0, 0.0, 0.0, 0.0)
             else:
-                hue = (val - 1) / max(len(unique_vals) - 1, 1)
-                r, g, b = _hsv_to_rgb(hue, 0.8, 0.9)
+                r, g, b = label_to_spread_color(val, len(unique_vals))
                 lut.SetTableValue(i, r, g, b, 0.5)
 
         color_mapper = vtk.vtkImageMapToColors()

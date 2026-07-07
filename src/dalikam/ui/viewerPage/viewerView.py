@@ -1,9 +1,35 @@
-import vtk
-from PyQt6.QtCore import Qt, pyqtSignal
+import vtkmodules.all as vtk
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget
 
 from dalikam.rendering.visualizer import SliceView, SlicerType
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
+
+def rgb_to_hex(rgb: tuple[float, float, float]) -> str:
+    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]*255),int(rgb[1]*255),int(rgb[2]*255))
+
+class SegmentationLabel(QWidget):
+    """
+        QWidget used to identify which label is assigned to which color.
+
+        Constructor attributes:
+            label_name: the name of the label that is to be displayed
+            color: the color of the label, given as an RGB tuple of values from 0 to 1
+    """
+    def __init__(self, label_name: str, color: tuple[float, float, float]) -> None:
+        super().__init__()
+        layout = QHBoxLayout()
+        clickable = QWidget()
+        clickable.setFixedSize(QSize(30,30))
+        clickable.setObjectName("labelColorSquare")
+        hex_code = rgb_to_hex(color)
+        clickable.setStyleSheet(f'background:{hex_code}')
+        layout.addWidget(clickable)
+        title =  QLabel(label_name)
+        title.setObjectName("labelTitle")
+        layout.addWidget(title)
+        layout.addStretch()
+        self.setLayout(layout)
 
 
 class SideMenu(QWidget):
@@ -12,8 +38,6 @@ class SideMenu(QWidget):
     Arranges view control buttons (Axial, Coronal, Sagittal, Segmentation) vertically with a
     dynamic label display area above them. The label area is cleared and repopulated on
     each `draw_labels` call. Initial labels must be set via `draw_labels` after construction.
-
-    TODO: the initial label display is a static placeholder, actual logic is yet to be implemented.
 
     Attributes:
         `menulayout (QVBoxLayout)`: top-level layout holding the label selector placeholder
@@ -39,7 +63,13 @@ class SideMenu(QWidget):
         super().__init__()
         self.menuLayout: QVBoxLayout = QVBoxLayout()
         self.setLayout(self.menuLayout)
-        self.menuLayout.addWidget(QLabel("this is where the label selector will be"))
+        title_layout = QHBoxLayout()
+        title_layout.addStretch()
+        menu_title = QLabel("Segmentation labels:")
+        menu_title.setObjectName("segmentationTitle")
+        title_layout.addWidget(menu_title)
+        title_layout.addStretch()
+        self.menuLayout.addLayout(title_layout)
 
         self.label_layout: QVBoxLayout = QVBoxLayout()
         self.menuLayout.addLayout(self.label_layout)
@@ -91,7 +121,7 @@ class SideMenu(QWidget):
                 if widget is not None:
                     widget.deleteLater()
 
-    def draw_labels(self, labels: list[str]):
+    def draw_labels(self, label_names: list[str], labels_idx: list[int], color_map: dict[int, tuple[float, float, float]]):
         """Replace the current label widgets with new ones from the provided list.
 
         Clears `label_layout` via `clear_layout`, then creates one `QLabel` per entry
@@ -101,8 +131,13 @@ class SideMenu(QWidget):
             `labels (list[str])`: segmentation label names to display.
         """
         self.clear_layout(self.label_layout)
-        for label in labels:
-            self.label_layout.addWidget(QLabel(label))
+        for i in range (0,len(label_names)):
+            color = color_map.get(labels_idx[i])
+            print(f"color at position {i} was {color}")
+            if color is not None:
+                self.label_layout.addWidget(SegmentationLabel(label_names[i], color))
+            else:
+                self.label_layout.addWidget(QLabel(label_names[0]))
 
 
 class viewerView(QWidget):
@@ -170,8 +205,7 @@ class viewerView(QWidget):
         _ = self._viewmodel.draw_file.connect(self.plot_file)
         _ = self._viewmodel.labels_changed.connect(self.side_menu.draw_labels)
 
-        # TODO: remove when segmentation pipeline provides real labels
-        self._viewmodel.testlabels()
+        self._viewmodel.init_labels()
 
     def cleanup_viewer(self):
         for view in self.slice_views:

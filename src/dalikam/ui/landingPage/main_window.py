@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, a0: QCloseEvent | None):
         viewer_widget = self.main_container.widget(2)
         if viewer_widget is not None:
-            viewer_widget.cleanup_viewer()
+            viewer_widget.cleanup_viewer()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
         if a0 is not None:
             a0.accept()
 

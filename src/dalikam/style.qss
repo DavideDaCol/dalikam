@@ -6,6 +6,10 @@ QWidget#sliceView{
     background-color: #000000;
 }
 
+QWidget#labelColorSquare{
+    border-radius: 8px;
+}
+
 QLabel {
     color: #d5d5d5;
 }
@@ -19,8 +23,16 @@ QLabel#mainTitle {
 QLabel#title {
     font-size: 32px;
     font-weight: bold;
-    color: #d5d5d5;
     margin: 24px;
+}
+
+QLabel#labelTitle {
+    font-size: 18px;
+    margin-left: 12px;
+}
+
+QLabel#segmentationTitle {
+    font-size: 18px;
 }
 
 QPushButton {
