@@ -1,3 +1,5 @@
 import os
+import platform
 
-os.environ["QT_QPA_PLATFORM"] = "xcb"
+if platform.system() == "Linux":
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
