@@ -1,16 +1,14 @@
 import os
 import subprocess
-from pathlib import Path
 
 from dalikam.tools.micromamba import download_micromamba
-
-ENV_NAME = "dalikam_oct"
-DEPTH = 3
+from dalikam.tools.utils import get_env_name, get_root
 
 
 def main():
     # get the path to the project root, the micromamba binary and the segmentation backend
-    ROOT = Path(__file__).resolve().parents[DEPTH]
+    ROOT = get_root()
+    ENV_NAME = get_env_name()
     MICROMAMBA_DIR = ROOT / "bin" / "micromamba"
     print(f"the project's root path is: {ROOT}")
     SEG_DIR = ROOT / "src" / "dalikam" / "backend" / "OCT_segmentation"

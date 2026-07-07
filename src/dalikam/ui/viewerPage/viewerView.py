@@ -1,10 +1,9 @@
+import vtk
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget
 
-from dalikam.ui.viewerPage.viewerVM import ViewerVM
 from dalikam.rendering.visualizer import SliceView, SlicerType
-
-import vtk
+from dalikam.ui.viewerPage.viewerVM import ViewerVM
 
 
 class SideMenu(QWidget):
@@ -38,14 +37,14 @@ class SideMenu(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.menulayout: QVBoxLayout = QVBoxLayout()
-        self.setLayout(self.menulayout)
-        self.menulayout.addWidget(QLabel("this is where the label selector will be"))
+        self.menuLayout: QVBoxLayout = QVBoxLayout()
+        self.setLayout(self.menuLayout)
+        self.menuLayout.addWidget(QLabel("this is where the label selector will be"))
 
         self.label_layout: QVBoxLayout = QVBoxLayout()
-        self.menulayout.addLayout(self.label_layout)
+        self.menuLayout.addLayout(self.label_layout)
 
-        self.menulayout.addStretch()
+        self.menuLayout.addStretch()
 
         self.axial_btn = QPushButton("Axial View")
         self.axial_btn.clicked.connect(self.axial_btn_clicked)
@@ -59,10 +58,10 @@ class SideMenu(QWidget):
         self.segmentation_btn = QPushButton("TEST Segmentation")
         self.segmentation_btn.clicked.connect(self.segmentation_btn_clicked)
 
-        self.menulayout.addWidget(self.axial_btn)
-        self.menulayout.addWidget(self.coronal_btn)
-        self.menulayout.addWidget(self.sagittal_btn)
-        self.menulayout.addWidget(self.segmentation_btn)
+        self.menuLayout.addWidget(self.axial_btn)
+        self.menuLayout.addWidget(self.coronal_btn)
+        self.menuLayout.addWidget(self.sagittal_btn)
+        self.menuLayout.addWidget(self.segmentation_btn)
 
     def axial_btn_clicked(self):
         self.orientation_changed.emit(0)
@@ -195,8 +194,10 @@ class viewerView(QWidget):
 
     def load_slices(self):
         counter = 1
+        # TODO fine for now, but this breaks mvvm a little bit
+        segmentation_result = self._viewmodel.start_segmentation()
         for view in self.slice_views:
-            view.add_segmentation()
+            view.add_segmentation(str(segmentation_result))
             view.vtkwidget.GetRenderWindow().Render()
             print(f"done drawing labels for viewer {counter}")
             counter += 1

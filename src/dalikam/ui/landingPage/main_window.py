@@ -1,20 +1,23 @@
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget
+
+from dalikam.backend.segmentation import SegmentationManager
 from dalikam.router.router import Router
-from dalikam.ui.landingPage.landingView import LandingPage
-from dalikam.ui.landingPage.landingVM import landingVM
-from dalikam.ui.landingPage.landingModel import LandingModel
-from dalikam.ui.filePage.fileView import FileSelectionView
 from dalikam.ui.filePage.fileModel import FileInfo, FileSelectionModel
 from dalikam.ui.filePage.fileVM import FileViewModel
+from dalikam.ui.filePage.fileView import FileSelectionView
+from dalikam.ui.landingPage.landingModel import LandingModel
+from dalikam.ui.landingPage.landingVM import landingVM
+from dalikam.ui.landingPage.landingView import LandingPage
 from dalikam.ui.viewerPage.viewerModel import viewerModel
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
 from dalikam.ui.viewerPage.viewerView import viewerView
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Dalikam")
-        self.setGeometry(700,300,800,600)
+        self.setGeometry(700, 300, 800, 600)
 
         # Initialize all models
         self._landingModel: LandingModel = LandingModel()
@@ -24,10 +27,13 @@ class MainWindow(QMainWindow):
         # Initialize app page router
         self._router: Router = Router()
 
+        # Initialize backend segmentation coordinator
+        self._seg_manager: SegmentationManager = SegmentationManager()
+
         # Initialize all view models
-        self.landingViewModel: landingVM = landingVM(self._landingModel, self._router) 
+        self.landingViewModel: landingVM = landingVM(self._landingModel, self._router)
         self.fileViewModel: FileViewModel = FileViewModel(self._fileModel, self._router)
-        self.viewerViewModel: ViewerVM = ViewerVM(self._viewerModel, self._router)
+        self.viewerViewModel: ViewerVM = ViewerVM(self._viewerModel, self._seg_manager, self._router)
 
         _ = self._router.routeChange.connect(self.change_page)
 

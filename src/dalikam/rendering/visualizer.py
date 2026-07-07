@@ -1,15 +1,17 @@
-from typing import override
 from enum import Enum
+from typing import override
+
+import vtk
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QSlider, QHBoxLayout, QLabel
-
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-import vtk
+
+from dalikam.backend.segmentation import SegmentationManager
 
 
-# Enum to differentiate between the possible types of orientations
 class SlicerType(Enum):
+    """ Enum to differentiate between the possible types of orientations"""
     axial = "axial"
     coronal = "coronal"
     sagittal = "sagittal"
@@ -28,13 +30,6 @@ class SlicerType(Enum):
                 OCT scan
         `max_slice (QLabel)`: indicates the biggest possible slide index for the current
                 OCT scan
-
-    Exported interface:
-        `update_slice()`: emits a PyQt signal containing the current position of the slider
-            such that the viewer can update its renderer.
-        `update_extent(layout: QLayout)`: replaces the default extent values with the ones 
-            exctracted from the NIfTI file
-
     """
 
 
@@ -84,6 +79,9 @@ class SliceView(QWidget):
 
         # VTK QT widget to visualize the 3D model
         self.vtkwidget: QVTKRenderWindowInteractor = QVTKRenderWindowInteractor()
+
+        # Backend middleman
+        self.sm_manager: SegmentationManager = SegmentationManager()
 
         decorator = QWidget()
         decorator.setObjectName("viewerDecorator")
@@ -223,10 +221,16 @@ class SliceView(QWidget):
         self.renderer.ResetCamera()
         self.vtkwidget.GetRenderWindow().Render()
 
-    def add_segmentation(self) -> None:
+    def add_segmentation(self, seg_path: str) -> None:
+        """
+            This function:
+            1) asks the backend manager to compute the segmentation
+            2) verifies that the results match the original scan
+            3) creates a color table to differentiate all labels
+            4) adds the segmentation map to the slicer
+        """
         loader = vtk.vtkNIFTIImageReader()
-        # TODO this is a test pipeline, it should refer to a hashmap instead of loading the same file
-        loader.SetFileName("/home/davide/Downloads/021_after.nii.gz")
+        loader.SetFileName(seg_path)
         loader.Update()
 
         raw_data = loader.GetOutput()
@@ -267,13 +271,10 @@ class SliceView(QWidget):
 
         self.seg_slice_actor.SetMapper(self.seg_mapper)
 
-        # self.seg_slice_actor.GetProperty().SetLookupTable(lut)
-        # self.seg_slice_actor.GetProperty().UseLookupTableScalarRangeOn()
-
         self.renderer.AddViewProp(self.seg_slice_actor)
 
-    # returns the minimum and maximum index for slices, according to the viewer's orientation
     def get_extent(self) -> tuple[int, int]:
+        """returns the minimum and maximum index for slices, according to the viewer's orientation"""
         if self.orientation == SlicerType.axial:
             return self.ext_z
         elif self.orientation == SlicerType.coronal:
@@ -281,18 +282,20 @@ class SliceView(QWidget):
         else:
             return self.ext_x
 
-    # updates the slice that is currently being viewed.
-    # This event is sent from the slider in the viewerView
     def change_slice(self, pos: int):
+        """updates the slice that is currently being viewed.
+        This event is sent from the slider in the viewerView"""
         self.slicer.SetSliceNumber(pos)
-        # TODO will this work if the segmentation isn't loaded in?
         self.seg_mapper.SetSliceNumber(pos)
         self.vtkwidget.GetRenderWindow().Render()
 
 
-# Overrides the InteractorStyleImage class so that drag events do not change
-# values like image exposure or brightness. The event is converted to panning
 class SliceInteractor(vtk.vtkInteractorStyleImage):
+    """
+        Overrides the InteractorStyleImage class so that drag events do not change
+        values like image exposure or brightness. The event is converted to panning
+    """
+
     def __init__(self):
         super().__init__()
         self.AddObserver("LeftButtonPressEvent", self.left_btn_press)

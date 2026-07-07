@@ -1,8 +1,11 @@
-from datetime import date, datetime
-import os
-from PyQt6.QtCore import QSettings
 import logging
+import os
+from datetime import date, datetime
+
+from dalikam.backend.state import StateManager
+
 logger = logging.getLogger(__name__)
+
 
 class FileInfo:
     path: str
@@ -18,7 +21,6 @@ class FileInfo:
 
 
 class FileSelectionModel:
-
     """
     Model for the File Selection page.
 
@@ -30,15 +32,16 @@ class FileSelectionModel:
 
     def __init__(self) -> None:
         # Initialize persistent storage of known .nii.gz file paths
-        self.known_paths: QSettings = QSettings("DavideDaCol","Dalikam")
+        self.settings: StateManager = StateManager()
 
     """
     returns all currently stored paths. 
     Paths are persistent: they are remembered even if the user closes the app.
     """
+
     def get_all_paths(self) -> list[FileInfo]:
 
-        old_paths:list[str] = self.known_paths.value("paths", [], list)
+        old_paths: list[str] = self.settings.get_raw_files()
         valid_paths: list[FileInfo] = []
         new_paths: list[str] = []
 
@@ -51,18 +54,18 @@ class FileSelectionModel:
                 logger.info(f"deleting old path {path}")
 
         if len(old_paths) != len(new_paths):
-            self.known_paths.setValue("paths", new_paths)
+            self.settings.set_raw_files(new_paths)
 
         return valid_paths
-
 
     """
     saves the given `path` in the `known_paths` data structure.
     Paths are assumed to be absolute with respect to the root file system.
     """
+
     def insert_path(self, path: str):
-        
-        current_paths: list[str] = self.known_paths.value("paths", [], list)
+
+        current_paths: list[str] = self.settings.get_raw_files()
 
         # Avoid duplicate paths
         if path in current_paths:
@@ -72,4 +75,4 @@ class FileSelectionModel:
         # Keeps only the 5 most recent file paths
         current_paths = current_paths[:5]
 
-        self.known_paths.setValue("paths", current_paths)
+        self.settings.set_raw_files(current_paths)
