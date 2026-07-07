@@ -1,4 +1,5 @@
 from pathlib import Path
+import platform
 
 DEPTH = 3
 ENV_NAME = "dalikam_oct"
@@ -14,4 +15,7 @@ def get_env_name() -> str:
 
 def get_micromamba_dir() -> Path:
     root = get_root()
-    return root / "bin" / "micromamba"
+    if platform.system() == "Windows":
+        return root / "Library" / "bin" / "micromamba"
+    else:
+        return root / "bin" / "micromamba"
