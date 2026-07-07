@@ -1,4 +1,6 @@
+from typing import override
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget
+from PyQt6.QtGui import QCloseEvent
 
 from dalikam.backend.segmentation import SegmentationManager
 from dalikam.router.router import Router
@@ -48,6 +50,15 @@ class MainWindow(QMainWindow):
         _ = self.main_container.addWidget(file_selection)
         _ = self.main_container.addWidget(viewer_section)
         self.setCentralWidget(self.main_container)
+
+    # REVIEW this is a little shaky
+    @override
+    def closeEvent(self, a0: QCloseEvent | None):
+        viewer_widget = self.main_container.widget(2)
+        if viewer_widget is not None:
+            viewer_widget.cleanup_viewer()
+        if a0 is not None:
+            a0.accept()
 
     def change_page(self, index: int, context: FileInfo | None):
         """

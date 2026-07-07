@@ -173,6 +173,10 @@ class viewerView(QWidget):
         # TODO: remove when segmentation pipeline provides real labels
         self._viewmodel.testlabels()
 
+    def cleanup_viewer(self):
+        for view in self.slice_views:
+            view.cleanup()
+
     def plot_file(self, data: vtk.vtkNIFTIImageReader):
         """Dispatch raw NIfTI data to the 3D renderer for display.
 

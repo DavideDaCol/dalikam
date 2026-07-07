@@ -43,25 +43,3 @@ class StateManager(object):
     def set_raw_files(self, paths: list[str]) -> None:
         """Sets list of paths as the list of saved OCT paths"""
         self.settings.setValue("paths", paths)
-
-    # TODO this function is at best unnecessary and at worst dangerous.
-    # TODO it can remove a segmentation even if the file is only renamed or moved.
-    # TODO does it matter if we keep an extra file?
-    def remove_segmentations(self) -> None:
-        """Scans the segmentation folder to check if the files still exist."""
-        # Get old saved values from persistent data structure
-        res = self.get_sm_files()
-        if res is not None:
-            old_paths: dict[str, Path] = res
-
-            valid_paths: dict[str, Path] = {}
-
-            # Check if stored paths still exist
-            for sm_path in old_paths:
-                key_val = old_paths.get(sm_path)
-                if key_val is not None and os.path.exists(key_val):
-                    valid_paths.update({sm_path: key_val})
-
-            # Update map if paths have been removed
-            if len(old_paths) != len(valid_paths):
-                self.settings.setValue("SM_unique_files", valid_paths)

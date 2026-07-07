@@ -46,16 +46,13 @@ class SegmentationManager:
 
         # TODO add a "ML model loader" that creates the "fold" structure that nnUNet needs 
 
-        self.settings.remove_segmentations()
-
     def segmentation_present(self, file_hash: str) -> bool:
         """Reads the sha256 hash of a file to check if it has already been segmented"""
         # Get old saved values from persistent data structure
         paths = self.settings.get_sm_files()
 
-        if paths is not None:
-            if paths.get(file_hash) is not None:
-                return True
+        if paths.get(file_hash) is not None:
+            return True
 
         return False
 

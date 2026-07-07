@@ -1,10 +1,12 @@
 from enum import Enum
 from typing import override
 
-import vtk
+import numpy as np
+import vtkmodules.all as vtk
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QSlider, QHBoxLayout, QLabel
+from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from dalikam.backend.segmentation import SegmentationManager
@@ -31,6 +33,27 @@ class SlicerType(Enum):
         `max_slice (QLabel)`: indicates the biggest possible slide index for the current
                 OCT scan
     """
+
+
+def _hsv_to_rgb(h: float, s: float, v: float) -> tuple[float, float, float]:
+    """Convert HSV to RGB. All values are in the range 0 - 1."""
+    i = int(h * 6)
+    f = h * 6 - i
+    p = v * (1 - s)
+    q = v * (1 - f * s)
+    t = v * (1 - (1 - f) * s)
+    i %= 6
+    if i == 0:
+        return v, t, p
+    if i == 1:
+        return q, v, p
+    if i == 2:
+        return p, v, t
+    if i == 3:
+        return p, q, v
+    if i == 4:
+        return t, p, v
+    return v, p, q
 
 
 class Slider(QWidget):
@@ -224,7 +247,7 @@ class SliceView(QWidget):
     def add_segmentation(self, seg_path: str) -> None:
         """
             This function:
-            1) asks the backend manager to compute the segmentation
+            1) Loads the data from the backend manager
             2) verifies that the results match the original scan
             3) creates a color table to differentiate all labels
             4) adds the segmentation map to the slicer
@@ -242,23 +265,25 @@ class SliceView(QWidget):
             return
         # TODO do this for all extents, maybe in separate function
 
-        selected_extent = (0, 0)
-        # TODO abstract this logic to a separate function
-        if self.orientation == SlicerType.axial:
-            selected_extent = self.ext_z
-        elif self.orientation == SlicerType.coronal:
-            selected_extent = self.ext_y
-        else:
-            selected_extent = self.ext_x
+        # get the amount of labels in the segmentation map
+        scalars = raw_data.GetPointData().GetScalars()
+        unique_vals = sorted(int(v) for v in np.unique(vtk_to_numpy(scalars)))
+        n_labels = len(unique_vals)
 
+        # create a lookup table to assign a color to each label
         lut = vtk.vtkLookupTable()
-        lut.SetNumberOfTableValues(3)
-        lut.SetRange(0, 2)
+        lut.SetNumberOfTableValues(n_labels)
+        lut.SetRange(min(unique_vals), max(unique_vals))
         lut.Build()
 
-        lut.SetTableValue(0, 0.0, 0.0, 0.0, 0.0)  # transparent
-        lut.SetTableValue(1, 1.0, 0.0, 0.0, 0.5)  # red
-        lut.SetTableValue(2, 0.0, 1.0, 0.0, 0.5)  # green
+        # assign colors dynamically and as spaced apart as possible
+        for i, val in enumerate(unique_vals):
+            if val == 0:
+                lut.SetTableValue(i, 0.0, 0.0, 0.0, 0.0)
+            else:
+                hue = (val - 1) / max(len(unique_vals) - 1, 1)
+                r, g, b = _hsv_to_rgb(hue, 0.8, 0.9)
+                lut.SetTableValue(i, r, g, b, 0.5)
 
         color_mapper = vtk.vtkImageMapToColors()
         color_mapper.SetLookupTable(lut)
@@ -266,8 +291,7 @@ class SliceView(QWidget):
         color_mapper.Update()
 
         self.seg_mapper.SetInputConnection(color_mapper.GetOutputPort())
-        mid_seg_slice = selected_extent[0] + (selected_extent[1] - selected_extent[0]) // 2
-        self.seg_mapper.SetSliceNumber(mid_seg_slice)
+        self.seg_mapper.SetSliceNumber(self.slicer.GetSliceNumber())
 
         self.seg_slice_actor.SetMapper(self.seg_mapper)
 
@@ -282,9 +306,22 @@ class SliceView(QWidget):
         else:
             return self.ext_x
 
+    def cleanup(self):
+        """"
+            removes the renderer object when the application is closed.
+            this makes the exit logs more readable.
+        """
+        self.renderer.RemoveAllViewProps()
+        rw = self.vtkwidget.GetRenderWindow()
+        rw.RemoveRenderer(self.renderer)
+        self.vtkwidget.Finalize()
+        rw.Finalize()
+
     def change_slice(self, pos: int):
-        """updates the slice that is currently being viewed.
-        This event is sent from the slider in the viewerView"""
+        """
+            updates the slice that is currently being viewed.
+            This event is sent from the slider in the viewerView
+        """
         self.slicer.SetSliceNumber(pos)
         self.seg_mapper.SetSliceNumber(pos)
         self.vtkwidget.GetRenderWindow().Render()

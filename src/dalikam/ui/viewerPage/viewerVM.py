@@ -31,4 +31,9 @@ class ViewerVM(QObject):
         self.labels_changed.emit(["label one", "label two", "label three"])
 
     def start_segmentation(self) -> Path | None:
-        return self._manager.run_segmentation(Path(self._model.get_path()))
+        result = self._manager.run_segmentation(Path(self._model.get_path()))
+        if result is not None:
+            labels = viewerModel.extract_labels_from_nifti(str(result))
+            self._model.labels = [str(l) for l in labels]
+            self.labels_changed.emit(self._model.labels)
+        return result
