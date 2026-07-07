@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 
 from dalikam.tools.micromamba import download_micromamba
@@ -9,7 +10,8 @@ def main():
     # get the path to the project root, the micromamba binary and the segmentation backend
     ROOT = get_root()
     ENV_NAME = get_env_name()
-    MICROMAMBA_DIR = ROOT / "bin" / "micromamba"
+    MICROMAMBA_BIN = "Library/bin/micromamba.exe" if platform.system() == "Windows" else "bin/micromamba"
+    MICROMAMBA_DIR = ROOT / MICROMAMBA_BIN
     print(f"the project's root path is: {ROOT}")
     SEG_DIR = ROOT / "src" / "dalikam" / "backend" / "OCT_segmentation"
     print(f"the segmentation backend is: {SEG_DIR}")
@@ -38,6 +40,20 @@ def main():
 
         # create the conda environment
         _ = subprocess.run([MICROMAMBA_DIR, "env", "create", "-n", ENV_NAME, "python=3.10", "-y"], check=True)
+
+        # install PyTorch with CUDA first (prevents CPU-only default from PyPI)
+        _ = subprocess.run([
+            MICROMAMBA_DIR,
+            "run",
+            "-n",
+            ENV_NAME,
+            "pip",
+            "install",
+            "torch",
+            "torchvision",
+            "--index-url",
+            "https://download.pytorch.org/whl/cu126",
+        ], check=True)
 
         # download the requirements
         _ = subprocess.run([

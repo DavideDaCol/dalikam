@@ -56,8 +56,9 @@ def download_micromamba(root: Path) -> None:
         ) as wrapped_raw:
             with tarfile.open(fileobj=wrapped_raw, mode="r|bz2") as tar:
                 # extract only the micromamba binary
+                micromamba_name = "Library/bin/micromamba.exe" if platform.system() == "Windows" else "bin/micromamba"
                 for member in tar:
-                    if member.name == "bin/micromamba":
+                    if member.name == micromamba_name:
                         tar.extract(member, path=root)
                         break
     print("Successfully extracted micromamba")
