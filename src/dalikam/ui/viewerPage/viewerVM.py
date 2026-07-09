@@ -22,12 +22,14 @@ def to_names(val: int) -> str:
 class ViewerVM(QObject):
     draw_file: pyqtSignal = pyqtSignal(object)
     labels_changed: pyqtSignal = pyqtSignal(list,list,dict)
+    segmentation_ended = pyqtSignal(Path)
 
     def __init__(self, model: viewerModel, manager: SegmentationManager, router: Router) -> None:
         super().__init__()
         self._model: viewerModel = model
         self._manager: SegmentationManager = manager
         self._router: Router = router
+        self._manager.completed_segmentation.connect(self.end_segmentation)
 
     def set_file(self, file: FileInfo):
         raw_data = self._model.set_raw_data(file.path)
@@ -36,12 +38,13 @@ class ViewerVM(QObject):
     def init_labels(self):
         self.labels_changed.emit(["load or create a segmentation map to view its labels"], [-1], {})
 
-    def start_segmentation(self) -> Path | None:
-        result = self._manager.run_segmentation(Path(self._model.get_path()))
-        if result is not None:
-            labels = viewerModel.extract_labels_from_nifti(str(result))
-            colors = generate_label_colors(labels)
-            named_labels = list(map(to_names,labels))
-            self._model.labels = named_labels
-            self.labels_changed.emit(self._model.labels, labels, colors)
-        return result
+    def start_segmentation(self):
+        self._manager.run_segmentation(Path(self._model.get_path()))
+    
+    def end_segmentation(self, result: Path):
+        labels = viewerModel.extract_labels_from_nifti(str(result))
+        colors = generate_label_colors(labels)
+        named_labels = list(map(to_names,labels))
+        self._model.labels = named_labels
+        self.labels_changed.emit(self._model.labels, labels, colors)
+        self.segmentation_ended.emit(result)

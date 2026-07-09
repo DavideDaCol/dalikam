@@ -86,7 +86,7 @@ class SideMenu(QWidget):
         self.sagittal_btn.clicked.connect(self.sagittal_btn_clicked)
 
         self.segmentation_btn = QPushButton("TEST Segmentation")
-        self.segmentation_btn.clicked.connect(self.segmentation_btn_clicked)
+        self.segmentation_btn.clicked.connect(self.sm_btn_clicked)
 
         self.menuLayout.addWidget(self.axial_btn)
         self.menuLayout.addWidget(self.coronal_btn)
@@ -102,7 +102,7 @@ class SideMenu(QWidget):
     def sagittal_btn_clicked(self):
         self.orientation_changed.emit(2)
 
-    def segmentation_btn_clicked(self):
+    def sm_btn_clicked(self):
         self.segmentation_requested.emit()
 
     def clear_layout(self, layout: QLayout):
@@ -196,7 +196,7 @@ class viewerView(QWidget):
         # control menu
         self.side_menu: SideMenu = SideMenu()
         _ = self.side_menu.orientation_changed.connect(self.change_view)
-        _ = self.side_menu.segmentation_requested.connect(self.load_slices)
+        _ = self.side_menu.segmentation_requested.connect(self.compute_slices)
 
         self.viewlayout.addWidget(self.side_menu, 1)
         self.viewlayout.addWidget(self.slices, 3)
@@ -204,6 +204,7 @@ class viewerView(QWidget):
         # connect all the signals
         _ = self._viewmodel.draw_file.connect(self.plot_file)
         _ = self._viewmodel.labels_changed.connect(self.side_menu.draw_labels)
+        _ = self._viewmodel.segmentation_ended.connect(self.load_slices)
 
         self._viewmodel.init_labels()
 
@@ -230,12 +231,14 @@ class viewerView(QWidget):
         active_view = self.slice_views[page]
         active_view.vtkwidget.GetRenderWindow().Render()
 
-    def load_slices(self):
+    def compute_slices(self):
+        self._viewmodel.start_segmentation()
+
+
+    def load_slices(self, slices):
         counter = 1
-        # TODO fine for now, but this breaks mvvm a little bit
-        segmentation_result = self._viewmodel.start_segmentation()
         for view in self.slice_views:
-            view.add_segmentation(str(segmentation_result))
+            view.add_segmentation(str(slices))
             view.vtkwidget.GetRenderWindow().Render()
             print(f"done drawing labels for viewer {counter}")
             counter += 1
