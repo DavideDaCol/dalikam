@@ -2,8 +2,8 @@ import hashlib
 import re
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, QThread, QProcess, pyqtSignal
-from PyQt6.QtWidgets import QDialog
+from PyQt6.QtCore import QObject, QProcess, pyqtSignal
+from PyQt6.QtWidgets import QPlainTextEdit, QDialog, QVBoxLayout, QLabel, QProgressBar, QPushButton
 
 from dalikam.backend.state import StateManager
 from dalikam.tools.utils import get_env_name, get_micromamba_dir
@@ -28,8 +28,40 @@ def build_nnunet_name(path: Path, file_hash: str) -> str:
     renamed = re.sub(".nii.gz", "_" + file_hash + "_0000.nii.gz", file_name)
     return renamed
 
+class InferenceProgressWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("inferenceProgressWindow")
+        self.setWindowTitle("AI Inference")
+        self.resize(550, 400)
+        self.setModal(True)
+
+        # Layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
+
+        # Message Label
+        self.label = QLabel("Creating segmentation map...", self)
+        layout.addWidget(self.label)
+
+        # Indefinite Progress Bar
+        # TODO consider updating this progress bar to follow nnUNet's logs
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0, 0) # Smooth loading animation
+        layout.addWidget(self.progress_bar)
+
+        # Log Text Box
+        self.log_text = QPlainTextEdit(self)
+        self.log_text.setReadOnly(True)
+        self.log_text.setObjectName("logBox")
+        layout.addWidget(self.log_text)
+
+        # Cancel Button
+        self.cancel_button = QPushButton("Cancel", self)
+        layout.addWidget(self.cancel_button)
+
 class SegmentationWorker(QObject):
-    finished = pyqtSignal()
     done_segmentation = pyqtSignal(int)
     progress_log = pyqtSignal(str)
 
@@ -42,6 +74,7 @@ class SegmentationWorker(QObject):
         self.prediction_path = str(prediction_path)
         self.device = device
         self.process: QProcess | None = None
+        self.dialog_window: InferenceProgressWindow | None = None
 
     def run(self):
 
@@ -50,7 +83,12 @@ class SegmentationWorker(QObject):
         self.process = QProcess(self)
 
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
+        self.process.readyReadStandardError.connect(self.handle_stderr)
         self.process.finished.connect(self.handle_end)
+
+        self.dialog_window = InferenceProgressWindow()
+        if self.dialog_window:
+            self.dialog_window.cancel_button.clicked.connect(self.process.kill)
 
         inference_arguments = [
                 "run",
@@ -64,22 +102,37 @@ class SegmentationWorker(QObject):
             ]
         
         self.process.start(self.conda, inference_arguments)
+        self.dialog_window.show()
 
 
     def handle_stdout(self):
         if self.process is not None:
             data = self.process.readAllStandardOutput()
             text = data.data().decode("utf-8", errors="replace")
-            print(f"thread said:\n{text}")
+            print(f"output pipe said:\n{text}")
+            if self.dialog_window:
+                self.dialog_window.log_text.appendPlainText(text)
+
+    def handle_stderr(self):
+        if self.process is not None:
+            data = self.process.readAllStandardError()
+            text = data.data().decode("utf-8", errors="replace")
+            print(f"error pipe said:\n{text}")
+            if self.dialog_window:
+                self.dialog_window.log_text.appendPlainText(text)
 
     def handle_end(self, exit_code):
         print("thread has finished execution")
 
+        if self.dialog_window is not None:
+            self.dialog_window.close()
+
         # To notify the end of inference
-        self.done_segmentation.emit(exit_code)
+        if exit_code == 0:
+            self.done_segmentation.emit(exit_code)
 
         # To tell the thread to close everything
-        self.finished.emit()
+        self.deleteLater()
 
 
 
@@ -102,16 +155,12 @@ class SegmentationManager(QObject):
         super().__init__()
         self.settings: StateManager = StateManager()
         self.segmentation_map: dict[str, Path] = self.settings.get_sm_files()
-        self.progress_window: QDialog = QDialog()
         self.final_file: Path | None = None
         # TODO this .tmp folder is ridiculous, use the tempfile module instead 
         self.tmp_dir: Path = Path(".tmp").resolve()
         self.file_hash: str | None = None
-        self.segmentation_thread: QThread | None = None
         self.worker: SegmentationWorker | None = None
         self.segmentation_loaded: bool = False
-
-        
 
         # TODO add a "ML model loader" that creates the "fold" structure that nnUNet needs 
 
@@ -161,25 +210,14 @@ class SegmentationManager(QObject):
             symlink_name = build_nnunet_name(path, hashed_file)
             self.tmp_dir.mkdir(exist_ok=True)
             symlink_path = self.tmp_dir.joinpath(symlink_name)
-            symlink_path.symlink_to(path.resolve())
-
-            # Instantiate a new thread
-            self.segmentation_thread = QThread()
+            if not symlink_path.exists():
+                symlink_path.symlink_to(path.resolve())
 
             # Instantiate a new worker
-            self.worker = SegmentationWorker(CONDA, ENV, self.tmp_dir, model_folder, predictions_folder, "cuda")
-
-            self.worker.moveToThread(self.segmentation_thread)
-
-            self.segmentation_thread.started.connect(self.worker.run)
-            self.worker.finished.connect(self.segmentation_thread.quit)
-
-            self.worker.finished.connect(self.worker.deleteLater)
-            self.segmentation_thread.finished.connect(self.segmentation_thread.deleteLater)
-
-            self.worker.done_segmentation.connect(self.conclude_segmentation)
-
-            self.segmentation_thread.start()
+            self.worker = SegmentationWorker(CONDA, ENV, self.tmp_dir, model_folder, predictions_folder, "cpu")
+            if self.worker:
+                self.worker.done_segmentation.connect(self.conclude_segmentation)
+                self.worker.run()
 
         else:
             self.conclude_segmentation()

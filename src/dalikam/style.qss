@@ -1,4 +1,4 @@
-QWidget#filePage, QWidget#viewerPage {
+QWidget#filePage, QWidget#viewerPage, QDialog#inferenceProgressWindow {
     background-color: #1e1f22;
 }
 
@@ -44,6 +44,12 @@ QPushButton {
     padding: 10px 10px;
     margin-top: 10px;
     outline: 0px;
+}
+
+QPlainTextEdit {
+    background-color: #252526;
+    color: #D4D4D4;
+    font-family: monospace;
 }
 
 QPushButton:hover {
