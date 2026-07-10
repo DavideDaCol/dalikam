@@ -19,3 +19,7 @@ class landingVM(QObject):
     def start_clicked(self):
         print("start button has been clicked")
         self._router.navigate("file")
+
+    def settings_clicked(self):
+        print("settings button has been clicked")
+        self._router.navigate("settings")

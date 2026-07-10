@@ -16,7 +16,8 @@ class Router(QObject):
         self.page_names.update({
             "landing": 0,
             "file": 1,
-            "viewer": 2
+            "viewer": 2,
+            "settings": 3
         })
 
     # TODO probably get rid of this, unless we want to dynamically add pages

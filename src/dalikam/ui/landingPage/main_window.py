@@ -10,6 +10,8 @@ from dalikam.ui.filePage.fileView import FileSelectionView
 from dalikam.ui.landingPage.landingModel import LandingModel
 from dalikam.ui.landingPage.landingVM import landingVM
 from dalikam.ui.landingPage.landingView import LandingPage
+from dalikam.ui.settingsPage.settingsVM import SettingsVM
+from dalikam.ui.settingsPage.settingsView import SettingsView
 from dalikam.ui.viewerPage.viewerModel import viewerModel
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
 from dalikam.ui.viewerPage.viewerView import viewerView
@@ -36,27 +38,28 @@ class MainWindow(QMainWindow):
         self.landingViewModel: landingVM = landingVM(self._landingModel, self._router)
         self.fileViewModel: FileViewModel = FileViewModel(self._fileModel, self._router)
         self.viewerViewModel: ViewerVM = ViewerVM(self._viewerModel, self._seg_manager, self._router)
+        self.settingsViewModel: SettingsVM = SettingsVM()
 
         _ = self._router.routeChange.connect(self.change_page)
 
         # Initialize all views
-        hero_section = LandingPage(self.landingViewModel)
-        file_selection = FileSelectionView(self.fileViewModel)
-        viewer_section = viewerView(self.viewerViewModel)
+        self.hero_section = LandingPage(self.landingViewModel)
+        self.file_selection = FileSelectionView(self.fileViewModel)
+        self.viewer_section = viewerView(self.viewerViewModel)
+        self.settings_section = SettingsView(self.settingsViewModel)
 
         # Create the main container of the app
         self.main_container: QStackedWidget = QStackedWidget()
-        _ = self.main_container.addWidget(hero_section)
-        _ = self.main_container.addWidget(file_selection)
-        _ = self.main_container.addWidget(viewer_section)
+        _ = self.main_container.addWidget(self.hero_section)
+        _ = self.main_container.addWidget(self.file_selection)
+        _ = self.main_container.addWidget(self.viewer_section)
+        _ = self.main_container.addWidget(self.settings_section)
         self.setCentralWidget(self.main_container)
 
-    # REVIEW this is a little shaky
     @override
     def closeEvent(self, a0: QCloseEvent | None):
-        viewer_widget = self.main_container.widget(2)
-        if viewer_widget is not None:
-            viewer_widget.cleanup_viewer()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+        if self.viewer_section is not None:
+            self.viewer_section.cleanup_viewer()
         if a0 is not None:
             a0.accept()
 

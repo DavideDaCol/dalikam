@@ -21,10 +21,12 @@ class BackgroundWidget(QWidget):
         self.bg: QPixmap = QPixmap(path)
 
     @override
-    # This method is used to scale the background in a sane way.
-    # It replicates the behavior of CSS cover by running whenever the paintEvent is emitted,
-    # the image is cropped if the window is too small in any dimension.
     def paintEvent(self, a0: QPaintEvent | None) -> None:
+        """
+            This method is used to scale the background in a sane way.
+            It replicates the behavior of CSS cover by running whenever the paintEvent is emitted,
+            the image is cropped if the window is too small in any dimension.
+        """
         painter = QPainter(self)
 
         # Get the aspect ratio of the background after the window resize
@@ -70,7 +72,7 @@ class LandingPage(QWidget):
         settings_btn = QPushButton("settings")
         exit_btn = QPushButton("exit")
 
-        _ = settings_btn.clicked.connect(self._viewmodel.debug_btn_press)
+        _ = settings_btn.clicked.connect(self._viewmodel.settings_clicked)
         _ = file_btn.clicked.connect(self._viewmodel.start_clicked)
         exit_btn.clicked.connect(QApplication.quit)
 
