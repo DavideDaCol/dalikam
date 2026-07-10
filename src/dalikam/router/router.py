@@ -20,9 +20,8 @@ class Router(QObject):
             "settings": 3
         })
 
-    # TODO probably get rid of this, unless we want to dynamically add pages
-    def register_route(self, name: str, index: int):
-        self.page_names.update({name: index})
+    def get_registered_routes(self) -> dict[str,int]:
+        return self.page_names
 
     def navigate(self, page: str, context: FileInfo | None = None):
         index = self.page_names[page]

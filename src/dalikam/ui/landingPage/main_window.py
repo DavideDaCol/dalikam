@@ -1,6 +1,8 @@
 from typing import override
-from PyQt6.QtWidgets import QMainWindow, QStackedWidget
-from PyQt6.QtGui import QCloseEvent
+
+from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QCloseEvent, QAction
+from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QToolBar
 
 from dalikam.backend.segmentation import SegmentationManager
 from dalikam.router.router import Router
@@ -17,6 +19,27 @@ from dalikam.ui.viewerPage.viewerVM import ViewerVM
 from dalikam.ui.viewerPage.viewerView import viewerView
 
 
+class MenuBar(QToolBar):
+    menu_route = pyqtSignal(int, object)
+
+    def __init__(self, page_map: dict[str, int]):
+        super().__init__()
+        self.map = page_map
+        self.setMovable(False)
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+
+        for name, page in [("Start", "landing"),
+                           ("File", "file"),
+                           ("Settings", "settings")]:
+            action = QAction(name, self)
+            action.triggered.connect(lambda checked, p=page: self.change_page(self.map[p]))
+            self.addAction(action)
+
+    def change_page(self, incoming: int):
+        print(f"got top bar navigation event, content: {incoming}")
+        self.menu_route.emit(incoming, None)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -31,6 +54,10 @@ class MainWindow(QMainWindow):
         # Initialize app page router
         self._router: Router = Router()
 
+        # Create the top level menu bar (hidden at startup)
+        self._toolbar = MenuBar(self._router.get_registered_routes())
+        self._toolbar.setVisible(False)
+
         # Initialize backend segmentation coordinator
         self._seg_manager: SegmentationManager = SegmentationManager()
 
@@ -41,6 +68,7 @@ class MainWindow(QMainWindow):
         self.settingsViewModel: SettingsVM = SettingsVM()
 
         _ = self._router.routeChange.connect(self.change_page)
+        _ = self._toolbar.menu_route.connect(self.change_page)
 
         # Initialize all views
         self.hero_section = LandingPage(self.landingViewModel)
@@ -55,6 +83,8 @@ class MainWindow(QMainWindow):
         _ = self.main_container.addWidget(self.viewer_section)
         _ = self.main_container.addWidget(self.settings_section)
         self.setCentralWidget(self.main_container)
+
+        self.addToolBar(self._toolbar)
 
     @override
     def closeEvent(self, a0: QCloseEvent | None):
@@ -80,6 +110,9 @@ class MainWindow(QMainWindow):
         """
         print(f"got page navigation event, switching to index {index}")
         self.main_container.setCurrentIndex(index)
+
+        # Hide the toolbar if you're on the landing page
+        self._toolbar.setVisible(index != self._router.page_names["landing"])
 
         # CASE: passing data from the file model to the viewer model
         if index == self._router.page_names["viewer"] and context:

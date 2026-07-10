@@ -65,3 +65,21 @@ QPushButton:hover {
 QMessageBox {
     background-color: #1e1f22
 }
+
+QToolBar {
+    background-color: #1e1f22;
+    border-bottom: 1px solid #0d0d0c;
+}
+
+QToolBar QToolButton {
+    color: #d5d5d5;
+    background-color: transparent;
+    border: none;
+    padding: 8px 16px;
+}
+
+QToolBar QToolButton:hover {
+    background-color: #000000;
+    border: 1px solid #9ac3fe;
+    border-radius: 4px;
+}
