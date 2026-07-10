@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QSlider, QHBoxLayout, QLabel
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
-from dalikam.backend.segmentation import SegmentationManager
 from dalikam.tools.utils import label_to_spread_color
 
 
@@ -57,7 +56,6 @@ class Slider(QWidget):
         self.slider_layout.addWidget(self.max_slice)
 
         self.slider.sliderMoved.connect(self.update_slice)
-        # TODO add the methods to update the labels and the slider
 
     def update_slice(self) -> None:
         self.slider_moved.emit(self.slider.sliderPosition())
@@ -85,9 +83,6 @@ class SliceView(QWidget):
 
         # VTK QT widget to visualize the 3D model
         self.vtkwidget: QVTKRenderWindowInteractor = QVTKRenderWindowInteractor()
-
-        # Backend middleman
-        self.sm_manager: SegmentationManager = SegmentationManager()
 
         decorator = QWidget()
         decorator.setObjectName("viewerDecorator")
@@ -169,13 +164,14 @@ class SliceView(QWidget):
         self.ext_z = (extents[4], extents[5])
 
         selected_extent = (0, 0)
-        # TODO review this
-        if self.orientation == SlicerType.axial:
-            selected_extent = self.ext_z
-        elif self.orientation == SlicerType.coronal:
-            selected_extent = self.ext_y
-        else:
-            selected_extent = self.ext_x
+
+        match self.orientation:
+            case SlicerType.axial:
+                selected_extent = self.ext_z
+            case SlicerType.coronal:
+                selected_extent = self.ext_y
+            case _:
+                selected_extent = self.ext_x
 
         self.slider.update_extent(selected_extent)
         self.slicer.SetInputConnection(data.GetOutputPort())

@@ -147,9 +147,6 @@ class viewerView(QWidget):
     layout. Connects ViewModel signals to update the rendered volume and label
     display.
 
-    TODO: the testlabels() call on the ViewModel emits sample labels and should be
-    replaced with actual data when the segmentation pipeline is integrated.
-    TODO: view mode switching (axial/coronal/sagittal/3D) is not yet implemented.
 
     Attributes:
         _viewmodel (ViewerVM): ViewModel driving the viewer page.

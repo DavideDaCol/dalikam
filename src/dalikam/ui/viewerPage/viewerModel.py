@@ -10,7 +10,7 @@ class viewerModel:
         self.labels: list[str] | None = None
 
     def set_raw_data(self, path: str) -> vtk.vtkNIFTIImageReader:
-        # TODO move this function to an async thread
+        # TODO move the raw_data update call to the viewmodel (and also a thread)
         print(f"starting load of file at path {path}")
         self.path_data = path
         self.raw_data.SetFileName(path)
@@ -20,7 +20,8 @@ class viewerModel:
 
     # REVIEW potentially unneeded
     def get_raw_data(self) -> vtk.vtkNIFTIImageReader:
-        if self.raw_data.GetNIFTIHeader() != "":
+        header = self.raw_data.GetNIFTIHeader()
+        if header != "" and header is not None:
             return self.raw_data
         else:
             print("CRITICAL: trying to access a file that was not loaded.")
