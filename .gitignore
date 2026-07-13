@@ -25,7 +25,7 @@ bin/
 
 # Segmentation models
 *.pth
-*models/*
+src/dalikam/backend/models/*
 
 # Segmentation maps or OCT scans
 *.nii
