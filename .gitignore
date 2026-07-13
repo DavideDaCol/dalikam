@@ -25,6 +25,7 @@ bin/
 
 # Segmentation models
 *.pth
+*models/*
 
 # Segmentation maps or OCT scans
 *.nii
