@@ -275,6 +275,10 @@ class SliceView(QWidget):
 
         self.renderer.AddViewProp(self.seg_slice_actor)
 
+    def remove_segmentation(self):
+        """Remove the segmentation overlay from the renderer."""
+        self.renderer.RemoveViewProp(self.seg_slice_actor)
+
     def get_extent(self) -> tuple[int, int]:
         """returns the minimum and maximum index for slices, according to the viewer's orientation"""
         if self.orientation == SlicerType.axial:

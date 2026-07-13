@@ -1,6 +1,6 @@
 import vtkmodules.all as vtk
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget
+from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QFileDialog, QDialog
 
 from dalikam.rendering.visualizer import SliceView, SlicerType
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
@@ -58,9 +58,14 @@ class SideMenu(QWidget):
     # TODO separate this routing logic in separate file
     orientation_changed = pyqtSignal(int)
     segmentation_requested = pyqtSignal()
+    export_requested = pyqtSignal()
+    load_segmentation_requested = pyqtSignal()
+    remove_segmentation_requested = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
+        self._export_mode = False
+        self._segmentation_loaded = False
         self.menuLayout: QVBoxLayout = QVBoxLayout()
         self.setLayout(self.menuLayout)
         title_layout = QHBoxLayout()
@@ -88,10 +93,14 @@ class SideMenu(QWidget):
         self.segmentation_btn = QPushButton("Create Segmentation")
         self.segmentation_btn.clicked.connect(self.sm_btn_clicked)
 
+        self.load_segmentation_btn = QPushButton("Load Segmentation")
+        self.load_segmentation_btn.clicked.connect(self.load_seg_btn_clicked)
+
         self.menuLayout.addWidget(self.axial_btn)
         self.menuLayout.addWidget(self.coronal_btn)
         self.menuLayout.addWidget(self.sagittal_btn)
         self.menuLayout.addWidget(self.segmentation_btn)
+        self.menuLayout.addWidget(self.load_segmentation_btn)
 
     def axial_btn_clicked(self):
         self.orientation_changed.emit(0)
@@ -103,7 +112,36 @@ class SideMenu(QWidget):
         self.orientation_changed.emit(2)
 
     def sm_btn_clicked(self):
-        self.segmentation_requested.emit()
+        if self._export_mode:
+            self.export_requested.emit()
+        else:
+            self.segmentation_requested.emit()
+
+    def set_export_mode(self):
+        """Switch the segmentation button to export mode."""
+        self._export_mode = True
+        self.segmentation_btn.setText("Export Segmentation")
+
+    def reset_create_mode(self):
+        """Switch the segmentation button back to create mode."""
+        self._export_mode = False
+        self.segmentation_btn.setText("Create Segmentation")
+
+    def load_seg_btn_clicked(self):
+        if self._segmentation_loaded:
+            self.remove_segmentation_requested.emit()
+        else:
+            self.load_segmentation_requested.emit()
+
+    def set_segmentation_loaded(self):
+        """Toggle the load/remove button to remove mode."""
+        self._segmentation_loaded = True
+        self.load_segmentation_btn.setText("Remove Segmentation")
+
+    def set_segmentation_unloaded(self):
+        """Toggle the load/remove button back to load mode."""
+        self._segmentation_loaded = False
+        self.load_segmentation_btn.setText("Load Segmentation")
 
     def clear_layout(self, layout: QLayout):
         """Remove all widgets from the given layout and schedule them for deletion.
@@ -194,6 +232,9 @@ class viewerView(QWidget):
         self.side_menu: SideMenu = SideMenu()
         _ = self.side_menu.orientation_changed.connect(self.change_view)
         _ = self.side_menu.segmentation_requested.connect(self.compute_slices)
+        _ = self.side_menu.export_requested.connect(self._on_export_requested)
+        _ = self.side_menu.load_segmentation_requested.connect(self._on_load_segmentation)
+        _ = self.side_menu.remove_segmentation_requested.connect(self._on_remove_segmentation)
 
         self.viewlayout.addWidget(self.side_menu, 1)
         self.viewlayout.addWidget(self.slices, 3)
@@ -202,6 +243,8 @@ class viewerView(QWidget):
         _ = self._viewmodel.draw_file.connect(self.plot_file)
         _ = self._viewmodel.labels_changed.connect(self.side_menu.draw_labels)
         _ = self._viewmodel.segmentation_ended.connect(self.load_slices)
+        _ = self._viewmodel.segmentation_ended.connect(self.side_menu.set_export_mode)
+        _ = self._viewmodel.segmentation_ended.connect(self.side_menu.set_segmentation_loaded)
 
         self._viewmodel.init_labels()
 
@@ -210,12 +253,8 @@ class viewerView(QWidget):
             view.cleanup()
 
     def plot_file(self, data: vtk.vtkNIFTIImageReader):
-        """Dispatch raw NIfTI data to the 3D renderer for display.
-
-        Args:
-            `data (vtk.vtkNIFTIImageReader)`: The reader with loaded NIfTI data
-                ready for rendering. Caller must ensure Update() has been called.
-        """
+        """Dispatch raw NIfTI data to the 3D renderer for display."""
+        self.side_menu.reset_create_mode()
         print(f"drawing {data.descriptive_name}")
         counter = 1
         for view in self.slice_views:
@@ -239,3 +278,31 @@ class viewerView(QWidget):
             view.vtkwidget.GetRenderWindow().Render()
             print(f"done drawing labels for viewer {counter}")
             counter += 1
+
+    def _on_export_requested(self):
+        save_dir = QFileDialog.getExistingDirectory(self, "Select Export Location")
+        if not save_dir:
+            return
+        from pathlib import Path
+        dest = self._viewmodel.export_segmentation(Path(save_dir))
+        popup = QDialog(self)
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel(f"Exported to {dest}"))
+        popup.setLayout(layout)
+        popup.exec()
+
+    def _on_load_segmentation(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Segmentation File", "", "NIfTI Files (*.nii.gz)"
+        )
+        if not path:
+            return
+        from pathlib import Path
+        self._viewmodel.load_external_segmentation(Path(path))
+
+    def _on_remove_segmentation(self):
+        for view in self.slice_views:
+            view.remove_segmentation()
+            view.vtkwidget.GetRenderWindow().Render()
+        self._viewmodel.init_labels()
+        self.side_menu.set_segmentation_unloaded()
