@@ -162,8 +162,6 @@ class SegmentationManager(QObject):
         self.worker: SegmentationWorker | None = None
         self.segmentation_loaded: bool = False
 
-        # TODO add a "ML model loader" that creates the "fold" structure that nnUNet needs 
-
     def segmentation_present(self, file_hash: str) -> bool:
         """Reads the sha256 hash of a file to check if it has already been segmented"""
         # Get old saved values from persistent data structure
@@ -187,7 +185,15 @@ class SegmentationManager(QObject):
         CONDA = get_micromamba_dir()
         ENV = get_env_name()
 
-        model_folder = Path(__file__).resolve().parents[0].joinpath("models")
+        # get the path to the model weights from the settings.
+        # this changes depending on the chosen model type
+        saved_model_type = self.settings.get_preferred_model_type()
+        saved_model_path = self.settings.get_model_path(saved_model_type) if saved_model_type else ""
+        if saved_model_path:
+            model_folder = Path(saved_model_path)
+        else:
+            model_folder = Path(__file__).resolve().parents[0] / "models" / "default"
+
         predictions_folder = Path(__file__).resolve().parents[0].joinpath("predictions")
 
         if path.name.endswith('.nii.gz'):
@@ -213,8 +219,10 @@ class SegmentationManager(QObject):
             if not symlink_path.exists():
                 symlink_path.symlink_to(path.resolve())
 
+            device = self.settings.get_preferred_device()
+
             # Instantiate a new worker
-            self.worker = SegmentationWorker(CONDA, ENV, self.tmp_dir, model_folder, predictions_folder, "cpu")
+            self.worker = SegmentationWorker(CONDA, ENV, self.tmp_dir, model_folder, predictions_folder, device)
             if self.worker:
                 self.worker.done_segmentation.connect(self.conclude_segmentation)
                 self.worker.run()

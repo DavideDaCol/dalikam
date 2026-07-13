@@ -20,6 +20,13 @@ def get_micromamba_dir() -> Path:
     else:
         return root / "bin" / "micromamba"
 
+def get_device_map() -> dict[int, str]:
+    return {
+        0: "cpu",
+        1: "cuda",
+        2: "mps"
+    }
+
 def hsv_to_rgb(h: float, s: float, v: float) -> tuple[float, float, float]:
     """Convert HSV to RGB. All values are in the range 0 - 1."""
     i = int(h * 6)

@@ -85,7 +85,7 @@ class SideMenu(QWidget):
         self.sagittal_btn = QPushButton("Sagittal View")
         self.sagittal_btn.clicked.connect(self.sagittal_btn_clicked)
 
-        self.segmentation_btn = QPushButton("TEST Segmentation")
+        self.segmentation_btn = QPushButton("Create Segmentation")
         self.segmentation_btn.clicked.connect(self.sm_btn_clicked)
 
         self.menuLayout.addWidget(self.axial_btn)

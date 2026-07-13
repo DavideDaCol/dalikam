@@ -12,6 +12,7 @@ from dalikam.ui.filePage.fileView import FileSelectionView
 from dalikam.ui.landingPage.landingModel import LandingModel
 from dalikam.ui.landingPage.landingVM import landingVM
 from dalikam.ui.landingPage.landingView import LandingPage
+from dalikam.ui.settingsPage.settingsModel import SettingsModel
 from dalikam.ui.settingsPage.settingsVM import SettingsVM
 from dalikam.ui.settingsPage.settingsView import SettingsView
 from dalikam.ui.viewerPage.viewerModel import viewerModel
@@ -50,6 +51,7 @@ class MainWindow(QMainWindow):
         self._landingModel: LandingModel = LandingModel()
         self._fileModel: FileSelectionModel = FileSelectionModel()
         self._viewerModel: viewerModel = viewerModel()
+        self._settingsModel: SettingsModel = SettingsModel()
 
         # Initialize app page router
         self._router: Router = Router()
@@ -65,7 +67,7 @@ class MainWindow(QMainWindow):
         self.landingViewModel: landingVM = landingVM(self._landingModel, self._router)
         self.fileViewModel: FileViewModel = FileViewModel(self._fileModel, self._router)
         self.viewerViewModel: ViewerVM = ViewerVM(self._viewerModel, self._seg_manager, self._router)
-        self.settingsViewModel: SettingsVM = SettingsVM()
+        self.settingsViewModel: SettingsVM = SettingsVM(self._settingsModel)
 
         _ = self._router.routeChange.connect(self.change_page)
         _ = self._toolbar.menu_route.connect(self.change_page)
