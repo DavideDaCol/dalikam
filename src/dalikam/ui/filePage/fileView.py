@@ -18,8 +18,8 @@ class FileEntryWidget(QWidget):
         icon_placeholder = QLabel("icon")
         file_name = QLabel(file.name)
         file_path = QLabel(file.path)
-        file_mod_date = QLabel(f"{file.last_mod_date}")
-        file_creat_date = QLabel(f"{file.creation_date}")
+        file_mod_date = QLabel(file.last_mod_date.strftime("%d %b %Y %H:%M"))
+        file_creat_date = QLabel(file.creation_date.strftime("%d %b %Y %H:%M"))
 
         layout.addWidget(icon_placeholder)
         layout.addWidget(file_name)
@@ -93,8 +93,8 @@ class FileSelectionView(QWidget):
         icon_placeholder = QLabel("icon")
         file_name = QLabel(file.name)
         file_path = QLabel(file.path)
-        file_mod_date = QLabel(f"{file.last_mod_date}")
-        file_creat_date = QLabel(f"{file.creation_date}")
+        file_mod_date = QLabel(file.last_mod_date.strftime("%d %b %Y %H:%M"))
+        file_creat_date = QLabel(file.creation_date.strftime("%d %b %Y %H:%M"))
 
         file_entry.addWidget(icon_placeholder)
         file_entry.addWidget(file_name)
