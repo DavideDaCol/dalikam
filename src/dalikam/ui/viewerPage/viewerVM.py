@@ -51,8 +51,8 @@ class ViewerVM(QObject):
         colors = generate_label_colors(labels)
         named_labels = list(map(to_names,labels))
         self._model.labels = named_labels
-        self.labels_changed.emit(self._model.labels, labels, colors)
         self.segmentation_ended.emit(result)
+        self.labels_changed.emit(self._model.labels, labels, colors)
 
     def export_segmentation(self, save_dir: Path) -> Path:
         """Copy the segmentation result to save_dir with a clean timestamped name."""

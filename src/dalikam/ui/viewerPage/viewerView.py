@@ -16,20 +16,34 @@ class SegmentationLabel(QWidget):
             label_name: the name of the label that is to be displayed
             color: the color of the label, given as an RGB tuple of values from 0 to 1
     """
-    def __init__(self, label_name: str, color: tuple[float, float, float]) -> None:
+    toggle: pyqtSignal = pyqtSignal(int,bool)
+
+    def __init__(self, label_name: str, index: int, color: tuple[float, float, float]) -> None:
         super().__init__()
         layout = QHBoxLayout()
-        clickable = QWidget()
-        clickable.setFixedSize(QSize(30,30))
-        clickable.setObjectName("labelColorSquare")
-        hex_code = rgb_to_hex(color)
-        clickable.setStyleSheet(f'background:{hex_code}')
-        layout.addWidget(clickable)
+        self.clickable = QWidget()
+        self.clickable.setFixedSize(QSize(30,30))
+        self.clickable.setObjectName("labelColorSquare")
+
+        self.visibility = True
+        self.index = index
+
+        self.hex_code = rgb_to_hex(color)
+        self.clickable.setStyleSheet(f'background:{self.hex_code}')
+        layout.addWidget(self.clickable)
         title =  QLabel(label_name)
         title.setObjectName("labelTitle")
         layout.addWidget(title)
         layout.addStretch()
         self.setLayout(layout)
+
+    def mousePressEvent(self, a0):
+        self.visibility = not self.visibility
+        self.toggle.emit(self.index, self.visibility)
+        if self.visibility:
+            self.clickable.setStyleSheet(f'background:{self.hex_code}')
+        else:
+            self.clickable.setStyleSheet('background:#808080')
 
 
 class SideMenu(QWidget):
@@ -61,6 +75,7 @@ class SideMenu(QWidget):
     export_requested = pyqtSignal()
     load_segmentation_requested = pyqtSignal()
     remove_segmentation_requested = pyqtSignal()
+    toggle_label_requested = pyqtSignal(int, bool)
 
     def __init__(self) -> None:
         super().__init__()
@@ -78,6 +93,8 @@ class SideMenu(QWidget):
 
         self.label_layout: QVBoxLayout = QVBoxLayout()
         self.menuLayout.addLayout(self.label_layout)
+
+        self.label_list: list[SegmentationLabel] = []
 
         self.menuLayout.addStretch()
 
@@ -171,12 +188,15 @@ class SideMenu(QWidget):
         self.clear_layout(self.label_layout)
         for i in range (0,len(label_names)):
             color = color_map.get(labels_idx[i])
-            print(f"color at position {i} was {color}")
             if color is not None:
-                self.label_layout.addWidget(SegmentationLabel(label_names[i], color))
+                label = SegmentationLabel(label_names[i], labels_idx[i], color)
+                label.toggle.connect(self.relay_toggle)
+                self.label_layout.addWidget(label)
             else:
                 self.label_layout.addWidget(QLabel(label_names[0]))
 
+    def relay_toggle(self, index: int, visible: bool):
+        self.toggle_label_requested.emit(index,visible)
 
 class viewerView(QWidget):
     """Main viewer page that hosts the 3D rendering widget and the side menu.
@@ -235,6 +255,7 @@ class viewerView(QWidget):
         _ = self.side_menu.export_requested.connect(self._on_export_requested)
         _ = self.side_menu.load_segmentation_requested.connect(self._on_load_segmentation)
         _ = self.side_menu.remove_segmentation_requested.connect(self._on_remove_segmentation)
+        _ = self.side_menu.toggle_label_requested.connect(self._on_toggle_visibility)
 
         self.viewlayout.addWidget(self.side_menu, 1)
         self.viewlayout.addWidget(self.slices, 3)
@@ -306,3 +327,8 @@ class viewerView(QWidget):
             view.vtkwidget.GetRenderWindow().Render()
         self._viewmodel.init_labels()
         self.side_menu.set_segmentation_unloaded()
+        self.side_menu.reset_create_mode()
+
+    def _on_toggle_visibility(self, index: int, visible: bool):
+        for view in self.slice_views:
+            view.toggle_label_visibility(index, visible)

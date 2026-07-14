@@ -67,7 +67,6 @@ def generate_label_colors(labels_int: list[int]) -> dict[int, tuple[float, float
     
     for num in labels_int:
         spread_color = label_to_spread_color(num, n_total)
-        print(f"associating to label {num} color {spread_color}")
         result.update({num: spread_color})
 
     return result

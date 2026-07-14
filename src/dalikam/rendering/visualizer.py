@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import override
+from typing import override, MutableSequence
 
 import numpy as np
 import vtkmodules.all as vtk
@@ -111,6 +111,7 @@ class SliceView(QWidget):
         self.vtkwidget.GetRenderWindow().AddRenderer(self.renderer)
 
         self.slicer: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
+        self.lut: vtk.vtkLookupTable = vtk.vtkLookupTable()
         self.seg_mapper: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
 
         if orientation == SlicerType.axial:
@@ -250,21 +251,21 @@ class SliceView(QWidget):
         n_labels = len(unique_vals)
 
         # create a lookup table to assign a color to each label
-        lut = vtk.vtkLookupTable()
-        lut.SetNumberOfTableValues(n_labels)
-        lut.SetRange(min(unique_vals), max(unique_vals))
-        lut.Build()
+        self.lut = vtk.vtkLookupTable()
+        self.lut.SetNumberOfTableValues(n_labels)
+        self.lut.SetRange(min(unique_vals), max(unique_vals))
+        self.lut.Build()
 
         # assign colors dynamically and as spaced apart as possible
         for i, val in enumerate(unique_vals):
             if val == 0:
-                lut.SetTableValue(i, 0.0, 0.0, 0.0, 0.0)
+                self.lut.SetTableValue(i, 0.0, 0.0, 0.0, 0.0)
             else:
                 r, g, b = label_to_spread_color(val, len(unique_vals))
-                lut.SetTableValue(i, r, g, b, 0.5)
+                self.lut.SetTableValue(i, r, g, b, 0.5)
 
         color_mapper = vtk.vtkImageMapToColors()
-        color_mapper.SetLookupTable(lut)
+        color_mapper.SetLookupTable(self.lut)
         color_mapper.SetInputData(raw_data)
         color_mapper.Update()
 
@@ -278,6 +279,18 @@ class SliceView(QWidget):
     def remove_segmentation(self):
         """Remove the segmentation overlay from the renderer."""
         self.renderer.RemoveViewProp(self.seg_slice_actor)
+
+    def toggle_label_visibility(self, label_idx: int, visible: bool) -> None:
+        colors: MutableSequence[float] = [0.0, 0.0, 0.0]
+        self.lut.GetColor(label_idx, colors)
+        if visible:
+            self.lut.SetTableValue(label_idx, colors[0], colors[1], colors[2], 0.5)
+        else:
+            self.lut.SetTableValue(label_idx, colors[0], colors[1], colors[2], 0)
+
+        # Tells VTK that the color lookup table got modified
+        self.lut.Modified()
+        self.vtkwidget.GetRenderWindow().Render()
 
     def get_extent(self) -> tuple[int, int]:
         """returns the minimum and maximum index for slices, according to the viewer's orientation"""
