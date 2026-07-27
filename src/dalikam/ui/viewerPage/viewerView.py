@@ -2,6 +2,7 @@ import vtkmodules.all as vtk
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QFileDialog, QDialog
 
+from dalikam.rendering.threed import ThreeDSliceView
 from dalikam.rendering.visualizer import SliceView, SlicerType
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
 
@@ -107,6 +108,9 @@ class SideMenu(QWidget):
         self.sagittal_btn = QPushButton("Sagittal View")
         self.sagittal_btn.clicked.connect(self.sagittal_btn_clicked)
 
+        self.threed_btn = QPushButton("3D View")
+        self.threed_btn.clicked.connect(self.threed_btn_clicked)
+
         self.segmentation_btn = QPushButton("Create Segmentation")
         self.segmentation_btn.clicked.connect(self.sm_btn_clicked)
 
@@ -116,6 +120,7 @@ class SideMenu(QWidget):
         self.menuLayout.addWidget(self.axial_btn)
         self.menuLayout.addWidget(self.coronal_btn)
         self.menuLayout.addWidget(self.sagittal_btn)
+        self.menuLayout.addWidget(self.threed_btn)
         self.menuLayout.addWidget(self.segmentation_btn)
         self.menuLayout.addWidget(self.load_segmentation_btn)
 
@@ -127,6 +132,9 @@ class SideMenu(QWidget):
 
     def sagittal_btn_clicked(self):
         self.orientation_changed.emit(2)
+
+    def threed_btn_clicked(self):
+        self.orientation_changed.emit(3)
 
     def sm_btn_clicked(self):
         if self._export_mode:
@@ -237,13 +245,15 @@ class viewerView(QWidget):
 
         # custom slice viewer
         self.slices = QStackedWidget()
-        self.slice_views: list[SliceView] = []
+        self.slice_views: list[SliceView | ThreeDSliceView] = []
         axial_slicer = SliceView(SlicerType.axial)
         self.slice_views.append(axial_slicer)
         coronal_slicer = SliceView(SlicerType.coronal)
         self.slice_views.append(coronal_slicer)
         sagittal_slicer = SliceView(SlicerType.sagittal)
         self.slice_views.append(sagittal_slicer)
+        treed_slicer = ThreeDSliceView()
+        self.slice_views.append(treed_slicer)
 
         for view in self.slice_views:
             self.slices.addWidget(view)
@@ -273,10 +283,9 @@ class viewerView(QWidget):
         for view in self.slice_views:
             view.cleanup()
 
-    def plot_file(self, data: vtk.vtkNIFTIImageReader):
-        """Dispatch raw NIfTI data to the 3D renderer for display."""
+    def plot_file(self, data: str):
+        """Dispatch raw NIfTI data to the renderer for display."""
         self.side_menu.reset_create_mode()
-        print(f"drawing {data.descriptive_name}")
         counter = 1
         for view in self.slice_views:
             view.load_model(data)
@@ -286,7 +295,7 @@ class viewerView(QWidget):
     def change_view(self, page: int):
         self.slices.setCurrentIndex(page)
         active_view = self.slice_views[page]
-        active_view.vtkwidget.GetRenderWindow().Render()
+        active_view.call_render()
 
     def compute_slices(self):
         self._viewmodel.start_segmentation()
@@ -296,7 +305,7 @@ class viewerView(QWidget):
         counter = 1
         for view in self.slice_views:
             view.add_segmentation(str(slices))
-            view.vtkwidget.GetRenderWindow().Render()
+            view.call_render()
             print(f"done drawing labels for viewer {counter}")
             counter += 1
 
@@ -324,7 +333,7 @@ class viewerView(QWidget):
     def _on_remove_segmentation(self):
         for view in self.slice_views:
             view.remove_segmentation()
-            view.vtkwidget.GetRenderWindow().Render()
+            view.call_render()
         self._viewmodel.init_labels()
         self.side_menu.set_segmentation_unloaded()
         self.side_menu.reset_create_mode()

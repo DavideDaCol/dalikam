@@ -36,8 +36,8 @@ class ViewerVM(QObject):
         self._manager.completed_segmentation.connect(self.end_segmentation)
 
     def set_file(self, file: FileInfo):
-        raw_data = self._model.set_raw_data(file.path)
-        self.draw_file.emit(raw_data)
+        self._model.path_data = file.path
+        self.draw_file.emit(file.path)
 
     def init_labels(self):
         self.labels_changed.emit(["load or create a segmentation map to view its labels"], [-1], {})
@@ -59,7 +59,8 @@ class ViewerVM(QObject):
         stem = Path(self._model.get_path()).with_suffix("").stem
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         dest = save_dir / f"{stem}_{timestamp}.nii.gz"
-        shutil.copy2(str(self._result_path), dest)
+        if self._result_path is not None:
+            shutil.copy2(str(self._result_path), dest)
         return dest
 
     def load_external_segmentation(self, path: Path):

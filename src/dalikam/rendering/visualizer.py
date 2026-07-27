@@ -60,10 +60,10 @@ class Slider(QWidget):
     def update_slice(self) -> None:
         self.slider_moved.emit(self.slider.sliderPosition())
 
-    def update_extent(self, range_val: tuple[int, int]) -> None:
+    def update_extent(self, range_val: tuple[int, int], start_pos: int) -> None:
         min_ext, max_ext = range_val
         self.slider.setRange(min_ext, max_ext)
-        self.slider.setSliderPosition((max_ext + min_ext) // 2)
+        self.slider.setSliderPosition(start_pos)
         self.min_slice.setText(str(min_ext))
         self.max_slice.setText(str(max_ext))
 
@@ -81,7 +81,7 @@ class SliceView(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        # VTK QT widget to visualize the 3D model
+        # VTK QT widget to visualize the 2D model
         self.vtkwidget: QVTKRenderWindowInteractor = QVTKRenderWindowInteractor()
 
         decorator = QWidget()
@@ -110,6 +110,7 @@ class SliceView(QWidget):
         self.renderer: vtk.vtkRenderer = vtk.vtkRenderer()
         self.vtkwidget.GetRenderWindow().AddRenderer(self.renderer)
 
+        self.reader: vtk.vtkNIFTIImageReader = vtk.vtkNIFTIImageReader()
         self.slicer: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
         self.lut: vtk.vtkLookupTable = vtk.vtkLookupTable()
         self.seg_mapper: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
@@ -155,10 +156,14 @@ class SliceView(QWidget):
         super().showEvent(a0)
     '''
 
-    def load_model(self, data: vtk.vtkNIFTIImageReader):
+    def load_model(self, data: str):
+        # Pass the NIfTI file in VTK's reader
+        self.reader.SetFileName(data)
+        self.reader.Update()
+
         # map the data in the .nii file to a set of image slices
         self.renderer.RemoveAllViewProps()
-        img_data = data.GetOutput()
+        img_data = self.reader.GetOutput()
         extents = img_data.GetExtent()
         self.ext_x = (extents[0], extents[1])
         self.ext_y = (extents[2], extents[3])
@@ -174,10 +179,9 @@ class SliceView(QWidget):
             case _:
                 selected_extent = self.ext_x
 
-        self.slider.update_extent(selected_extent)
-        self.slicer.SetInputConnection(data.GetOutputPort())
-
         mid_slice = selected_extent[0] + (selected_extent[1] - selected_extent[0]) // 2
+        self.slider.update_extent(selected_extent, mid_slice)
+        self.slicer.SetInputConnection(self.reader.GetOutputPort())
         self.slicer.SetSliceNumber(mid_slice)
 
         self.slice_actor.SetMapper(self.slicer)
@@ -319,6 +323,9 @@ class SliceView(QWidget):
         """
         self.slicer.SetSliceNumber(pos)
         self.seg_mapper.SetSliceNumber(pos)
+        self.vtkwidget.GetRenderWindow().Render()
+
+    def call_render(self):
         self.vtkwidget.GetRenderWindow().Render()
 
 
