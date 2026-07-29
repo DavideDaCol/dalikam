@@ -1,12 +1,21 @@
 from dataclasses import dataclass
-from typing import override, MutableSequence
+from typing import MutableSequence, override
 
 import nibabel as nib
 import numpy as np
 import vtkmodules.all as vtk
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QResizeEvent
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QCheckBox, QPushButton
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
+)
+from scipy.ndimage import zoom
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from vtkmodules.util import numpy_support
 from vtkmodules.util.numpy_support import vtk_to_numpy
@@ -16,6 +25,14 @@ from vtkmodules.vtkRenderingCore import vtkActor
 from dalikam.tools.utils import label_to_spread_color
 
 MAX_VOXELS = 20_000_000
+
+
+def downsample_volume(scan: np.ndarray, affine: np.ndarray, factor: float) -> tuple[np.ndarray, np.ndarray]:
+    """Downsample volume and adjust the affine matrix accordingly."""
+    scan = zoom(scan, factor, order=1)
+    new_affine = affine.copy()
+    new_affine[:3, :3] = affine[:3, :3] / factor
+    return scan, new_affine
 
 
 @dataclass
@@ -83,6 +100,7 @@ class ThreeDSliceView(QWidget):
         self._opacity = vtkPiecewiseFunction()
         self._clip_fn = vtk.vtkPlanes()
         self._lut = vtk.vtkLookupTable()
+        self._cap_lut = vtk.vtkLookupTable()
         self._caps = {}
 
         #Initialize axis sliders
@@ -242,34 +260,32 @@ class ThreeDSliceView(QWidget):
 
     def load_model(self, data: str):
         """Loads the raw data from the data path inside the VolumeData instance, then calls the volume renderer."""
-
-        # extracts the volume's orientation
         affine = nib.load(data).affine
-
-        # reads the raw voxel data
         scan = nib.load(data).get_fdata(dtype=np.float32)
-
+        
         # intensity normalization: clip the data at the lowest and highest 1%
         lo, hi = np.percentile(scan, 1), np.percentile(scan, 99)
         scan = np.clip(scan, lo, hi)
         scan = (scan - lo) / (hi - lo)
-
-        # downsampling: drop the amount of voxels to render if the volume is too large
         if scan.size > MAX_VOXELS:
-            # TODO perform downsampling
-            pass
-
+            factor = (MAX_VOXELS / scan.size) ** (1.0 / 3)
+            scan, affine = downsample_volume(scan, affine, factor)
+        
         # Rotate volume
         # Nibabel assumes (X,Y,Z) while VTK assumes (Z,Y,X)
         scan = np.ascontiguousarray(np.transpose(scan, (2, 1, 0)))
         dims = (scan.shape[2], scan.shape[1], scan.shape[0])
-
         onset = noise_floor_heuristic(scan)
-
-        # convert the raw voxel data into uint8 to save space
         scan_u8 = np.ascontiguousarray((scan * 255).astype(np.uint8))
+        self.load_model_data(VolumeData(scan_u8, None, dims, onset, affine))
 
-        self._data = VolumeData(scan_u8, None, dims, onset, affine)
+    def load_model_data(self, data: VolumeData):
+        """Sets pre-loaded VolumeData and builds the VTK rendering pipeline.
+
+        Meant to be called on the main thread after VolumeData has been
+        produced by a background worker.
+        """
+        self._data = data
         self._set_slider_values()
         self._render_model()
 
@@ -284,6 +300,9 @@ class ThreeDSliceView(QWidget):
         if self._data is not None:
             self._data.seg_labels = raw_data
             self._render_segmentation()
+
+    def remove_segmentation(self):
+        self.renderer.RemoveViewProp(self._segmentation_actor)
 
     # ---- RENDERING ----
 
@@ -394,6 +413,14 @@ class ThreeDSliceView(QWidget):
                 else:
                     r, g, b = label_to_spread_color(val, len(unique_vals))
                     self._lut.SetTableValue(i, r, g, b, 0.5)
+
+            # Stage 2b: duplicate the LUT for the caps with full opacity
+            self._cap_lut.DeepCopy(self._lut)
+            for i, val in enumerate(unique_vals):
+                if val != 0:
+                    colors: MutableSequence[float] = [0.0, 0.0, 0.0]
+                    self._cap_lut.GetColor(i, colors)
+                    self._cap_lut.SetTableValue(i, colors[0], colors[1], colors[2], 1.0)
 
             # Stage 3: use SurfaceNets3D to convert the label map into a 3D mesh
             self._segmentation_mesh.SetInputData(seg_img)
@@ -584,7 +611,7 @@ class ThreeDSliceView(QWidget):
         """Add region bounds to the segmentation if the volume has been sliced."""
         img = vtk.vtkImageData()
         color_map = vtk.vtkImageMapToColors()
-        color_map.SetLookupTable(self._lut)
+        color_map.SetLookupTable(self._cap_lut)
         color_map.SetInputData(img)
         color_map.SetOutputFormatToRGBA()
 
