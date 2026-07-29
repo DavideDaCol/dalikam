@@ -1,12 +1,31 @@
-import vtkmodules.all as vtk
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QLayout, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QFileDialog, QDialog
+from typing import override
 
-from dalikam.rendering.visualizer import SliceView, SlicerType
+from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from dalikam.rendering.common import Visualizer
+from dalikam.rendering.loader import VolumeLoadWorker
+from dalikam.rendering.threed import ThreeDSliceView
+from dalikam.rendering.visualizer import SlicerType, SliceView
+from dalikam.ui.components.loading_overlay import LoadingOverlay
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
 
+
 def rgb_to_hex(rgb: tuple[float, float, float]) -> str:
-    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]*255),int(rgb[1]*255),int(rgb[2]*255))
+    return "#{:02x}{:02x}{:02x}".format(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
+
 
 class SegmentationLabel(QWidget):
     """
@@ -16,30 +35,31 @@ class SegmentationLabel(QWidget):
             label_name: the name of the label that is to be displayed
             color: the color of the label, given as an RGB tuple of values from 0 to 1
     """
-    toggle: pyqtSignal = pyqtSignal(int,bool)
+    toggle: pyqtSignal = pyqtSignal(int, bool)
 
-    def __init__(self, label_name: str, index: int, color: tuple[float, float, float]) -> None:
+    def __init__(self, label_name: str, label_val: int, color: tuple[float, float, float]) -> None:
         super().__init__()
         layout = QHBoxLayout()
         self.clickable = QWidget()
-        self.clickable.setFixedSize(QSize(30,30))
+        self.clickable.setFixedSize(QSize(30, 30))
         self.clickable.setObjectName("labelColorSquare")
 
         self.visibility = True
-        self.index = index
+        self.label_val = label_val
 
         self.hex_code = rgb_to_hex(color)
         self.clickable.setStyleSheet(f'background:{self.hex_code}')
         layout.addWidget(self.clickable)
-        title =  QLabel(label_name)
+        title = QLabel(label_name)
         title.setObjectName("labelTitle")
         layout.addWidget(title)
         layout.addStretch()
         self.setLayout(layout)
 
-    def mousePressEvent(self, a0):
+    @override
+    def mousePressEvent(self, a0: QMouseEvent | None):
         self.visibility = not self.visibility
-        self.toggle.emit(self.index, self.visibility)
+        self.toggle.emit(self.label_val, self.visibility)
         if self.visibility:
             self.clickable.setStyleSheet(f'background:{self.hex_code}')
         else:
@@ -107,6 +127,9 @@ class SideMenu(QWidget):
         self.sagittal_btn = QPushButton("Sagittal View")
         self.sagittal_btn.clicked.connect(self.sagittal_btn_clicked)
 
+        self.threed_btn = QPushButton("3D View")
+        self.threed_btn.clicked.connect(self.threed_btn_clicked)
+
         self.segmentation_btn = QPushButton("Create Segmentation")
         self.segmentation_btn.clicked.connect(self.sm_btn_clicked)
 
@@ -116,6 +139,7 @@ class SideMenu(QWidget):
         self.menuLayout.addWidget(self.axial_btn)
         self.menuLayout.addWidget(self.coronal_btn)
         self.menuLayout.addWidget(self.sagittal_btn)
+        self.menuLayout.addWidget(self.threed_btn)
         self.menuLayout.addWidget(self.segmentation_btn)
         self.menuLayout.addWidget(self.load_segmentation_btn)
 
@@ -127,6 +151,9 @@ class SideMenu(QWidget):
 
     def sagittal_btn_clicked(self):
         self.orientation_changed.emit(2)
+
+    def threed_btn_clicked(self):
+        self.orientation_changed.emit(3)
 
     def sm_btn_clicked(self):
         if self._export_mode:
@@ -176,27 +203,31 @@ class SideMenu(QWidget):
                 if widget is not None:
                     widget.deleteLater()
 
-    def draw_labels(self, label_names: list[str], labels_idx: list[int], color_map: dict[int, tuple[float, float, float]]):
+    def draw_labels(self, label_names: list[str], label_values: list[int],
+                    color_map: dict[int, tuple[float, float, float]]):
         """Replace the current label widgets with new ones from the provided list.
 
         Clears `label_layout` via `clear_layout`, then creates one `QLabel` per entry
         and appends it to the layout.
 
         Args:
-            `labels (list[str])`: segmentation label names to display.
+            `label_names (list[str])`: segmentation label names to display.
+            `label_values (list[int])`: the NIfTI voxel values for each label.
+            `color_map (dict)`: mapping from label value to (r,g,b) color tuple.
         """
         self.clear_layout(self.label_layout)
-        for i in range (0,len(label_names)):
-            color = color_map.get(labels_idx[i])
+        for i in range(len(label_names)):
+            color = color_map.get(label_values[i])
             if color is not None:
-                label = SegmentationLabel(label_names[i], labels_idx[i], color)
+                label = SegmentationLabel(label_names[i], label_values[i], color)
                 label.toggle.connect(self.relay_toggle)
                 self.label_layout.addWidget(label)
             else:
-                self.label_layout.addWidget(QLabel(label_names[0]))
+                self.label_layout.addWidget(QLabel(label_names[i]))
 
-    def relay_toggle(self, index: int, visible: bool):
-        self.toggle_label_requested.emit(index,visible)
+    def relay_toggle(self, label_val: int, visible: bool):
+        self.toggle_label_requested.emit(label_val, visible)
+
 
 class viewerView(QWidget):
     """Main viewer page that hosts the 3D rendering widget and the side menu.
@@ -237,13 +268,16 @@ class viewerView(QWidget):
 
         # custom slice viewer
         self.slices = QStackedWidget()
-        self.slice_views: list[SliceView] = []
+        self.slice_views: list[Visualizer] = []
         axial_slicer = SliceView(SlicerType.axial)
         self.slice_views.append(axial_slicer)
         coronal_slicer = SliceView(SlicerType.coronal)
         self.slice_views.append(coronal_slicer)
         sagittal_slicer = SliceView(SlicerType.sagittal)
         self.slice_views.append(sagittal_slicer)
+        threed_slicer = ThreeDSliceView()
+        self.slice_views.append(threed_slicer)
+        self._threed_slicer = threed_slicer
 
         for view in self.slice_views:
             self.slices.addWidget(view)
@@ -269,34 +303,75 @@ class viewerView(QWidget):
 
         self._viewmodel.init_labels()
 
+        self._loading_overlay = LoadingOverlay(self)
+        self._volume_worker = None
+        self._volume_thread = None
+
     def cleanup_viewer(self):
+        self._abort_volume_loading()
         for view in self.slice_views:
             view.cleanup()
 
-    def plot_file(self, data: vtk.vtkNIFTIImageReader):
-        """Dispatch raw NIfTI data to the 3D renderer for display."""
+    def _abort_volume_loading(self):
+        if self._volume_thread is not None:
+            self._volume_thread.quit()
+            self._volume_thread.wait(2000)
+            self._volume_thread = None
+            self._volume_worker = None
+
+    def plot_file(self, data: str):
+        """Dispatch raw NIfTI data to the renderer for display."""
         self.side_menu.reset_create_mode()
-        print(f"drawing {data.descriptive_name}")
-        counter = 1
-        for view in self.slice_views:
+        self._abort_volume_loading()
+
+        self._loading_overlay.set_message("Loading scan...")
+        self._loading_overlay.show()
+        QApplication.processEvents()
+
+        for i, view in enumerate(self.slice_views[:3]):
+            self._loading_overlay.set_message(f"Loading {['axial', 'coronal', 'sagittal'][i]} view...")
+            QApplication.processEvents()
             view.load_model(data)
-            print(f"done loading data for viewer {counter}")
-            counter += 1
+            self._loading_overlay.set_progress((i + 1) * 33, 99)
+
+        self._loading_overlay.set_message("Processing 3D volume...")
+        self._loading_overlay.set_indeterminate(True)
+        QApplication.processEvents()
+
+        self._volume_thread = QThread(self)
+        self._volume_worker = VolumeLoadWorker(data)
+        self._volume_worker.moveToThread(self._volume_thread)
+        self._volume_thread.started.connect(self._volume_worker.run)
+        self._volume_worker.progress.connect(self._loading_overlay.set_progress)
+        self._volume_worker.status_message.connect(self._loading_overlay.set_message)
+        self._volume_worker.finished.connect(self._on_volume_loaded)
+        self._volume_worker.finished.connect(self._volume_thread.quit)
+        self._volume_worker.finished.connect(self._volume_worker.deleteLater)
+        self._volume_thread.finished.connect(self._volume_thread.deleteLater)
+        self._volume_thread.start()
+
+    def _on_volume_loaded(self, data):
+        self._volume_worker = None
+        self._volume_thread = None
+        if isinstance(data, Exception):
+            self._loading_overlay.set_message(f"Failed to load 3D volume: {data}")
+            return
+        self._threed_slicer.load_model_data(data)
+        self._loading_overlay.hide()
 
     def change_view(self, page: int):
         self.slices.setCurrentIndex(page)
         active_view = self.slice_views[page]
-        active_view.vtkwidget.GetRenderWindow().Render()
+        active_view.call_render()
 
     def compute_slices(self):
         self._viewmodel.start_segmentation()
-
 
     def load_slices(self, slices):
         counter = 1
         for view in self.slice_views:
             view.add_segmentation(str(slices))
-            view.vtkwidget.GetRenderWindow().Render()
+            view.call_render()
             print(f"done drawing labels for viewer {counter}")
             counter += 1
 
@@ -324,11 +399,11 @@ class viewerView(QWidget):
     def _on_remove_segmentation(self):
         for view in self.slice_views:
             view.remove_segmentation()
-            view.vtkwidget.GetRenderWindow().Render()
+            view.call_render()
         self._viewmodel.init_labels()
         self.side_menu.set_segmentation_unloaded()
         self.side_menu.reset_create_mode()
 
-    def _on_toggle_visibility(self, index: int, visible: bool):
+    def _on_toggle_visibility(self, label_val: int, visible: bool):
         for view in self.slice_views:
-            view.toggle_label_visibility(index, visible)
+            view.toggle_label_visibility(label_val, visible)

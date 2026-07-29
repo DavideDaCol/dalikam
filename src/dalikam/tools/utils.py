@@ -47,26 +47,26 @@ def hsv_to_rgb(h: float, s: float, v: float) -> tuple[float, float, float]:
         return t, p, v
     return v, p, q
 
-def label_to_spread_color(label: int, label_n: int) -> tuple[float,float,float]:
+def label_to_spread_color(label_idx: int, total_count: int) -> tuple[float,float,float]:
         """
-            Assign a color to a label, given the label index and how many labels there are.
-            The colors are spread programmatically over the color wheel using hsv, which is
-            then converted back to rgb for ease of use.
+            Assign a color to a label, given its position in the label list and how many
+            labels there are. The colors are spread programmatically over the color wheel
+            using hsv, which is then converted back to rgb for ease of use.
         """
-        hue = (label - 1) / max(label_n - 1, 1)
+        hue = (label_idx - 1) / max(total_count - 1, 1)
         r, g, b = hsv_to_rgb(hue, 0.8, 0.9)
 
         return r,g,b
 
-def generate_label_colors(labels_int: list[int]) -> dict[int, tuple[float, float, float]]:
+def generate_label_colors(label_values: list[int]) -> dict[int, tuple[float, float, float]]:
     """
-        Create a color map from the labels to the colors, to identify which label has which color.
+        Create a color map from the label values to the colors, to identify which label has which color.
     """
     result: dict[int, tuple[float, float, float]] = {}
-    n_total = len(labels_int) + 1 # consider missing background label
+    n_total = len(label_values) + 1 # consider missing background label
     
-    for num in labels_int:
-        spread_color = label_to_spread_color(num, n_total)
-        result.update({num: spread_color})
+    for idx, value in enumerate(label_values):
+        spread_color = label_to_spread_color(idx + 1, n_total)
+        result.update({value: spread_color})
 
     return result
