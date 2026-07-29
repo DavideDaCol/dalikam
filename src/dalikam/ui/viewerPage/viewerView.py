@@ -1,4 +1,7 @@
+from typing import override
+
 from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -34,7 +37,7 @@ class SegmentationLabel(QWidget):
     """
     toggle: pyqtSignal = pyqtSignal(int, bool)
 
-    def __init__(self, label_name: str, index: int, color: tuple[float, float, float]) -> None:
+    def __init__(self, label_name: str, label_val: int, color: tuple[float, float, float]) -> None:
         super().__init__()
         layout = QHBoxLayout()
         self.clickable = QWidget()
@@ -42,7 +45,7 @@ class SegmentationLabel(QWidget):
         self.clickable.setObjectName("labelColorSquare")
 
         self.visibility = True
-        self.index = index
+        self.label_val = label_val
 
         self.hex_code = rgb_to_hex(color)
         self.clickable.setStyleSheet(f'background:{self.hex_code}')
@@ -53,9 +56,10 @@ class SegmentationLabel(QWidget):
         layout.addStretch()
         self.setLayout(layout)
 
-    def mousePressEvent(self, a0):
+    @override
+    def mousePressEvent(self, a0: QMouseEvent | None):
         self.visibility = not self.visibility
-        self.toggle.emit(self.index, self.visibility)
+        self.toggle.emit(self.label_val, self.visibility)
         if self.visibility:
             self.clickable.setStyleSheet(f'background:{self.hex_code}')
         else:
@@ -199,7 +203,7 @@ class SideMenu(QWidget):
                 if widget is not None:
                     widget.deleteLater()
 
-    def draw_labels(self, label_names: list[str], labels_idx: list[int],
+    def draw_labels(self, label_names: list[str], label_values: list[int],
                     color_map: dict[int, tuple[float, float, float]]):
         """Replace the current label widgets with new ones from the provided list.
 
@@ -207,20 +211,22 @@ class SideMenu(QWidget):
         and appends it to the layout.
 
         Args:
-            `labels (list[str])`: segmentation label names to display.
+            `label_names (list[str])`: segmentation label names to display.
+            `label_values (list[int])`: the NIfTI voxel values for each label.
+            `color_map (dict)`: mapping from label value to (r,g,b) color tuple.
         """
         self.clear_layout(self.label_layout)
         for i in range(len(label_names)):
-            color = color_map.get(labels_idx[i])
+            color = color_map.get(label_values[i])
             if color is not None:
-                label = SegmentationLabel(label_names[i], labels_idx[i], color)
+                label = SegmentationLabel(label_names[i], label_values[i], color)
                 label.toggle.connect(self.relay_toggle)
                 self.label_layout.addWidget(label)
             else:
-                self.label_layout.addWidget(QLabel(label_names[0]))
+                self.label_layout.addWidget(QLabel(label_names[i]))
 
-    def relay_toggle(self, index: int, visible: bool):
-        self.toggle_label_requested.emit(index, visible)
+    def relay_toggle(self, label_val: int, visible: bool):
+        self.toggle_label_requested.emit(label_val, visible)
 
 
 class viewerView(QWidget):
@@ -269,9 +275,9 @@ class viewerView(QWidget):
         self.slice_views.append(coronal_slicer)
         sagittal_slicer = SliceView(SlicerType.sagittal)
         self.slice_views.append(sagittal_slicer)
-        treed_slicer = ThreeDSliceView()
-        self.slice_views.append(treed_slicer)
-        self._treed_slicer = treed_slicer
+        threed_slicer = ThreeDSliceView()
+        self.slice_views.append(threed_slicer)
+        self._threed_slicer = threed_slicer
 
         for view in self.slice_views:
             self.slices.addWidget(view)
@@ -350,7 +356,7 @@ class viewerView(QWidget):
         if isinstance(data, Exception):
             self._loading_overlay.set_message(f"Failed to load 3D volume: {data}")
             return
-        self._treed_slicer.load_model_data(data)
+        self._threed_slicer.load_model_data(data)
         self._loading_overlay.hide()
 
     def change_view(self, page: int):
@@ -398,6 +404,6 @@ class viewerView(QWidget):
         self.side_menu.set_segmentation_unloaded()
         self.side_menu.reset_create_mode()
 
-    def _on_toggle_visibility(self, index: int, visible: bool):
+    def _on_toggle_visibility(self, label_val: int, visible: bool):
         for view in self.slice_views:
-            view.toggle_label_visibility(index, visible)
+            view.toggle_label_visibility(label_val, visible)

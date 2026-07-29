@@ -3,7 +3,7 @@ import vtkmodules.all as vtk
 from vtkmodules.util.numpy_support import vtk_to_numpy
 
 
-class viewerModel:
+class ViewerModel:
     def __init__(self) -> None:
         self.path_data: str = ""
         self.labels: list[str] | None = None
@@ -22,5 +22,5 @@ class viewerModel:
         reader.SetFileName(path)
         reader.Update()
         scalars = reader.GetOutput().GetPointData().GetScalars()
-        unique_vals = np.unique(vtk_to_numpy(scalars))
-        return sorted(int(v) for v in unique_vals if v != 0)
+        values = np.unique(vtk_to_numpy(scalars))
+        return sorted(int(v) for v in values if v != 0)

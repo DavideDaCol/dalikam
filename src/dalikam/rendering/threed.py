@@ -59,7 +59,7 @@ def weighted_quantile(values, weights, q):
 def noise_floor_heuristic(vol) -> float:
     """Estimate background noise level from gradient-weighted slice medians."""
     # compute gradients over z dimension, since it's usually the most detailed
-    z_dim = vol.shape[2]
+    z_dim = vol.shape[0]
     slice_medians = []
     # compute gradients once every 5 slices to speed up computation
     for i in range(z_dim // 5):
@@ -100,6 +100,7 @@ class ThreeDSliceView(QWidget):
         self._opacity = vtkPiecewiseFunction()
         self._clip_fn = vtk.vtkPlanes()
         self._lut = vtk.vtkLookupTable()
+        self._label_lut_lookup: dict[int, int] = {}
         self._cap_lut = vtk.vtkLookupTable()
         self._caps = {}
 
@@ -179,13 +180,13 @@ class ThreeDSliceView(QWidget):
         row.addWidget(self._onset_sld)
 
         # Max opacity slider, sets the level of transparency of the volume
-        self._max_op_lbl = QLabel("Max: 1%")
+        self._max_op_lbl = QLabel("Max: 100%")
         row.addWidget(self._max_op_lbl)
 
         self._max_op_sld = QSlider(Qt.Orientation.Horizontal)
         self._max_op_sld.setRange(1, 100)
-        # Initially view model at 1% opacity to show the segmentation underneath
-        self._max_op_sld.setValue(1)
+        # Initially view model at 100% opacity (reduced to 1% when segmentation loads)
+        self._max_op_sld.setValue(100)
         self._max_op_sld.valueChanged.connect(self._on_opacity_changed)
         row.addWidget(self._max_op_sld)
 
@@ -280,7 +281,7 @@ class ThreeDSliceView(QWidget):
         self.load_model_data(VolumeData(scan_u8, None, dims, onset, affine))
 
     def load_model_data(self, data: VolumeData):
-        """Sets pre-loaded VolumeData and builds the VTK rendering pipeline.
+        """Sets preloaded VolumeData and builds the VTK rendering pipeline.
 
         Meant to be called on the main thread after VolumeData has been
         produced by a background worker.
@@ -300,9 +301,14 @@ class ThreeDSliceView(QWidget):
         if self._data is not None:
             self._data.seg_labels = raw_data
             self._render_segmentation()
+            self._max_op_sld.setValue(1)
 
     def remove_segmentation(self):
         self.renderer.RemoveViewProp(self._segmentation_actor)
+        self._data.seg_labels = None
+        self._caps = {}
+        self._refresh_caps()
+        self._max_op_sld.setValue(100)
 
     # ---- RENDERING ----
 
@@ -348,11 +354,11 @@ class ThreeDSliceView(QWidget):
             color.AddRGBPoint(onset * 255, 0.0, 0.0, 0.0)
             color.AddRGBPoint(255.0, 1.0, 1.0, 1.0)
 
-            # Stage 4: apply transparency level also using the signal onset, initially at 1%
+            # Stage 4: apply transparency level also using the signal onset, initially at 100%
             opacity = vtk.vtkPiecewiseFunction()
             opacity.AddPoint(0.0, 0.0)
             opacity.AddPoint(onset * 255, 0.0)
-            opacity.AddPoint(255.0, 0.01)
+            opacity.AddPoint(255.0, 1.0)
 
             # Apply all the computed functions and set rendering parameters
             prop = vtk.vtkVolumeProperty()
@@ -398,35 +404,35 @@ class ThreeDSliceView(QWidget):
 
             # get the amount of labels in the segmentation map
             scalars = seg_img.GetPointData().GetScalars()
-            unique_vals = sorted(int(v) for v in np.unique(vtk_to_numpy(scalars)))
-            n_labels = len(unique_vals)
+            label_values = sorted(int(v) for v in np.unique(vtk_to_numpy(scalars)))
+            n_labels = len(label_values)
 
             # Stage 2: create a lookup table to assign a color to each label
             self._lut.SetNumberOfTableValues(n_labels)
-            self._lut.SetRange(min(unique_vals), max(unique_vals))
+            self._lut.SetRange(min(label_values), max(label_values))
             self._lut.Build()
 
             # assign colors dynamically and as spaced apart as possible
-            for i, val in enumerate(unique_vals):
-                if val == 0:
+            for i, value in enumerate(label_values):
+                if value == 0:
                     self._lut.SetTableValue(i, 0.0, 0.0, 0.0, 0.0)
                 else:
-                    r, g, b = label_to_spread_color(val, len(unique_vals))
+                    r, g, b = label_to_spread_color(i, len(label_values))
                     self._lut.SetTableValue(i, r, g, b, 0.5)
+                self._label_lut_lookup.update({value: i})
 
             # Stage 2b: duplicate the LUT for the caps with full opacity
             self._cap_lut.DeepCopy(self._lut)
-            for i, val in enumerate(unique_vals):
-                if val != 0:
+            for i, value in enumerate(label_values):
+                if value != 0:
                     colors: MutableSequence[float] = [0.0, 0.0, 0.0]
                     self._cap_lut.GetColor(i, colors)
                     self._cap_lut.SetTableValue(i, colors[0], colors[1], colors[2], 1.0)
 
             # Stage 3: use SurfaceNets3D to convert the label map into a 3D mesh
             self._segmentation_mesh.SetInputData(seg_img)
-            self._segmentation_mesh.SetValue(0, 0)
-            self._segmentation_mesh.SetValue(1, 1)
-            self._segmentation_mesh.SetValue(2, 2)
+            for i, value in enumerate(label_values):
+                self._segmentation_mesh.SetValue(i, value)
             self._segmentation_mesh.Update()
 
             # Stage 4: add the clipping planes to slice the segmentation
@@ -446,7 +452,7 @@ class ThreeDSliceView(QWidget):
             mapper.SetScalarModeToUseCellData()
             mapper.SetArrayComponent(0)
             mapper.SetLookupTable(self._lut)
-            mapper.SetScalarRange(0, 3)
+            mapper.SetScalarRange(0, n_labels)
 
             # tweak the actor parameters for improved visualization
             self._segmentation_actor.SetMapper(mapper)
@@ -468,19 +474,22 @@ class ThreeDSliceView(QWidget):
         """Simple callback function to refresh the renderer if the state has changed."""
         self._vtk_widget.GetRenderWindow().Render()
 
-    def toggle_label_visibility(self, label_idx: int, visible: bool) -> None:
-        """Modifies the lookup table to show or hide the label with index `label_idx`."""
+    def toggle_label_visibility(self, label_val: int, visible: bool) -> None:
+        """Modifies the lookup table to show or hide the label with the given value."""
 
         colors: MutableSequence[float] = [0.0, 0.0, 0.0]
-        self._lut.GetColor(label_idx, colors)
-        if visible:
-            self._lut.SetTableValue(label_idx, colors[0], colors[1], colors[2], 0.5)
-        else:
-            self._lut.SetTableValue(label_idx, colors[0], colors[1], colors[2], 0)
 
-        # Tells VTK that the color lookup table got modified
-        self._lut.Modified()
-        self.call_render()
+        lut_idx = self._label_lut_lookup.get(label_val)
+        if lut_idx is not None:
+            self._lut.GetColor(lut_idx, colors)
+            if visible:
+                self._lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 0.5)
+            else:
+                self._lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 0)
+
+            # Tells VTK that the color lookup table got modified
+            self._lut.Modified()
+            self.call_render()
 
     def cleanup(self):
         """Cleanly closes all connections and rendering objects."""
@@ -589,7 +598,7 @@ class ThreeDSliceView(QWidget):
         self._vtk_widget.GetRenderWindow().Render()
 
     def _on_reset(self):
-        self._max_op_sld.setValue(1)
+        self._max_op_sld.setValue(100)
         if self._data is not None:
             self._onset_sld.setValue(int(self._data.signal_onset * 1000))
             self._x_min_sld.setValue(0)

@@ -113,6 +113,7 @@ class SliceView(QWidget):
         self.reader: vtk.vtkNIFTIImageReader = vtk.vtkNIFTIImageReader()
         self.slicer: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
         self.lut: vtk.vtkLookupTable = vtk.vtkLookupTable()
+        self._label_lut_lookup: dict[int, int] = {}
         self.seg_mapper: vtk.vtkImageSliceMapper = vtk.vtkImageSliceMapper()
 
         if orientation == SlicerType.axial:
@@ -127,7 +128,6 @@ class SliceView(QWidget):
 
         self.renderer.ResetCamera()
         self.vtkwidget.Initialize()
-        self.vtkwidget.Start()
 
         self.vtkwidget.GetRenderWindow().Render()
 
@@ -251,22 +251,23 @@ class SliceView(QWidget):
 
         # get the amount of labels in the segmentation map
         scalars = raw_data.GetPointData().GetScalars()
-        unique_vals = sorted(int(v) for v in np.unique(vtk_to_numpy(scalars)))
-        n_labels = len(unique_vals)
+        label_values = sorted(int(v) for v in np.unique(vtk_to_numpy(scalars)))
+        n_labels = len(label_values)
 
         # create a lookup table to assign a color to each label
         self.lut = vtk.vtkLookupTable()
         self.lut.SetNumberOfTableValues(n_labels)
-        self.lut.SetRange(min(unique_vals), max(unique_vals))
+        self.lut.SetRange(min(label_values), max(label_values))
         self.lut.Build()
 
         # assign colors dynamically and as spaced apart as possible
-        for i, val in enumerate(unique_vals):
-            if val == 0:
+        for i, value in enumerate(label_values):
+            if value == 0:
                 self.lut.SetTableValue(i, 0.0, 0.0, 0.0, 0.0)
             else:
-                r, g, b = label_to_spread_color(val, len(unique_vals))
+                r, g, b = label_to_spread_color(i, len(label_values))
                 self.lut.SetTableValue(i, r, g, b, 0.5)
+            self._label_lut_lookup.update({value: i})
 
         color_mapper = vtk.vtkImageMapToColors()
         color_mapper.SetLookupTable(self.lut)
@@ -283,18 +284,23 @@ class SliceView(QWidget):
     def remove_segmentation(self):
         """Remove the segmentation overlay from the renderer."""
         self.renderer.RemoveViewProp(self.seg_slice_actor)
+        self.seg_slice_actor = None
 
-    def toggle_label_visibility(self, label_idx: int, visible: bool) -> None:
+
+    def toggle_label_visibility(self, label_val: int, visible: bool) -> None:
         colors: MutableSequence[float] = [0.0, 0.0, 0.0]
-        self.lut.GetColor(label_idx, colors)
-        if visible:
-            self.lut.SetTableValue(label_idx, colors[0], colors[1], colors[2], 0.5)
-        else:
-            self.lut.SetTableValue(label_idx, colors[0], colors[1], colors[2], 0)
 
-        # Tells VTK that the color lookup table got modified
-        self.lut.Modified()
-        self.vtkwidget.GetRenderWindow().Render()
+        lut_idx = self._label_lut_lookup.get(label_val)
+        if lut_idx is not None:
+            self.lut.GetColor(lut_idx, colors)
+            if visible:
+                self.lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 0.5)
+            else:
+                self.lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 0)
+
+            # Tells VTK that the color lookup table got modified
+            self.lut.Modified()
+            self.vtkwidget.GetRenderWindow().Render()
 
     def get_extent(self) -> tuple[int, int]:
         """returns the minimum and maximum index for slices, according to the viewer's orientation"""
