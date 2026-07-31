@@ -25,7 +25,7 @@ class FileInfo:
     creation_date: datetime
     last_mod_date: datetime
     size: int
-    mtime_ns: int
+    modified_stamp_ns: int
     file_hash: str | None
 
     def __init__(self, path: str, file_hash: str | None = None):
@@ -34,13 +34,14 @@ class FileInfo:
         self.file_hash = file_hash
 
         stat = os.stat(self.path)
-        self.creation_date = datetime.fromtimestamp(stat.st_birthtime)
-        self.last_mod_date = datetime.fromtimestamp(stat.st_mtime)
+        timezone = datetime.now().astimezone().tzinfo
+        self.creation_date = datetime.fromtimestamp(stat.st_birthtime, timezone)
+        self.last_mod_date = datetime.fromtimestamp(stat.st_mtime, timezone)
         self.size = stat.st_size
         # Nanosecond mtime is stored verbatim to validate the cached hash on
         # reload: float mtimes lose precision through QSettings and would
         # invalidate the cache even when the file was never touched.
-        self.mtime_ns = stat.st_mtime_ns
+        self.modified_stamp_ns = stat.st_mtime_ns
 
 
 class Folder:
@@ -73,11 +74,11 @@ class Folder:
     def _file_to_dict(file: FileInfo) -> dict:
         # The cached hash is only trustworthy while the file's mtime and size
         # are unchanged; storing both lets us validate it on reload for free.
-        # mtime_ns is an integer, so it round-trips through QSettings exactly.
+        # modified_stamp_ns is an integer, so it round-trips through QSettings exactly.
         return {
             "path": file.path,
             "file_hash": file.file_hash,
-            "mtime_ns": file.mtime_ns,
+            "modified_stamp_ns": file.modified_stamp_ns,
             "size": file.size,
         }
 
@@ -194,7 +195,7 @@ class FolderManager:
         cached_hash = file_data.get("file_hash")
         if (
             cached_hash
-            and file_data.get("mtime_ns") == stat.st_mtime_ns
+            and file_data.get("modified_stamp_ns") == stat.st_mtime_ns
             and file_data.get("size") == stat.st_size
         ):
             return FileInfo(path, file_hash=cached_hash)
