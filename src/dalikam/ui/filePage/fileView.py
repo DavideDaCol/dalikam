@@ -1,8 +1,8 @@
 from functools import partial
 from typing import override
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent, QShowEvent
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QFontMetrics, QIcon, QMouseEvent, QPixmap, QShowEvent
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from dalikam.tools.utils import get_root
 from dalikam.ui.filePage.fileModel import DEFAULT_FOLDER_NAME, FileInfo, Folder
 from dalikam.ui.filePage.fileVM import FileViewModel
 
@@ -22,6 +23,9 @@ DATE_FORMAT = "%d %b %Y %H:%M"
 
 SEGMENTED_COLOR = "#4ade80"
 UNSEGMENTED_COLOR = "#6b7280"
+
+NAME_COLUMN_WIDTH = 180
+SEGMENT_TEXT_WIDTH = 270
 
 
 def format_size(num: int) -> str:
@@ -32,6 +36,19 @@ def format_size(num: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{value:.1f} PB"
+
+
+def _asset_pixmap(name: str, size: int) -> QPixmap:
+    """Load an asset icon from the assets folder, scaled to ``size`` px."""
+    path = get_root() / "assets" / name
+    if not path.exists():
+        return QPixmap()
+    return QPixmap(str(path)).scaled(
+        size,
+        size,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
 
 
 class FileRowWidget(QWidget):
@@ -52,36 +69,88 @@ class FileRowWidget(QWidget):
         self.setObjectName("fileRow")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 2, 8, 2)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(6)
+        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         self._seg_label = QLabel()
         self._seg_label.setObjectName("segIndicator")
 
-        name = QLabel(file.name)
-        name.setObjectName("fileName")
-        name.setToolTip(file.path)
+        self._seg_text = QLabel()
+        self._seg_text.setObjectName("segText")
 
-        info_btn = QPushButton("Info")
+        icon_label = QLabel()
+        icon_label.setPixmap(_asset_pixmap("icon.png", 24))
+
+        title = file.name
+        while "." in title:
+            title = title.rsplit(".", 1)[0]
+        if len(title) > 25:
+            title = title[:24] + "…"
+
+        self._name = QLabel(title)
+        self._name.setObjectName("fileName")
+        self._name.setToolTip(file.path)
+
+        # Both the name column and the status text use fixed widths, so the
+        # three groups have identical extents on every row. The equal stretch
+        # items then distribute the leftover space evenly.
+        self._name.setFixedWidth(NAME_COLUMN_WIDTH)
+        self._name.setText(
+            QFontMetrics(self._name.font()).elidedText(
+                title, Qt.TextElideMode.ElideRight, NAME_COLUMN_WIDTH
+            )
+        )
+        self._seg_text.setFixedWidth(SEGMENT_TEXT_WIDTH)
+
+        info_btn = QPushButton()
+        info_btn.setObjectName("iconButton")
+        info_btn.setIcon(QIcon(_asset_pixmap("info_icon.png", 24)))
+        info_btn.setIconSize(QSize(24, 24))
         info_btn.setToolTip("Show detailed file information")
-        move_btn = QPushButton("Move")
+        move_btn = QPushButton("Change folder")
+        move_btn.setObjectName("rowButton")
         move_btn.setToolTip("Move to another folder")
 
         info_btn.clicked.connect(lambda: self.info_requested.emit(self.file))
         move_btn.clicked.connect(lambda: self.move_requested.emit(self.file))
 
+        move_btn.setFixedHeight(32)
+        info_btn.setFixedHeight(32)
+
+        layout.addWidget(icon_label)
+        layout.addSpacing(8)
+        layout.addWidget(self._name)
+
+        layout.addStretch(1)
         layout.addWidget(self._seg_label)
-        layout.addWidget(name)
-        layout.addStretch()
-        layout.addWidget(info_btn)
+        layout.addSpacing(6)
+        layout.addWidget(self._seg_text)
+
+        layout.addStretch(1)
         layout.addWidget(move_btn)
+        layout.addSpacing(6)
+        layout.addWidget(info_btn)
 
         self.set_segmented(segmented)
 
     def set_segmented(self, segmented: bool) -> None:
-        """Update the indicator: green dot if a segmentation exists, grey if not."""
-        self._seg_label.setText("●" if segmented else "○")
+        """Update the indicator: green sphere + label if a segmentation exists."""
+        self._seg_label.setFixedSize(24, 24)
+        if segmented:
+            self._seg_label.setStyleSheet(
+                f"background-color: {SEGMENTED_COLOR}; border-radius: 12px;"
+            )
+        else:
+            self._seg_label.setStyleSheet(
+                f"background-color: transparent;"
+                f"border: 2px solid {UNSEGMENTED_COLOR}; border-radius: 12px;"
+            )
+        self._seg_text.setText(
+            "Segmentation present" if segmented else "Segmentation absent"
+        )
         color = SEGMENTED_COLOR if segmented else UNSEGMENTED_COLOR
-        self._seg_label.setStyleSheet(f"color: {color}; font-size: 12pt;")
+        self._seg_text.setStyleSheet(f"color: {color}; font-size: 10pt;")
         self._seg_label.setToolTip(
             "Segmentation available" if segmented else "No segmentation"
         )
@@ -138,10 +207,14 @@ class FolderWidget(QWidget):
         self._header.clicked.connect(self.toggle)
 
         header_layout = QHBoxLayout(self._header)
-        header_layout.setContentsMargins(12, 6, 12, 6)
+        header_layout.setContentsMargins(16, 10, 16, 10)
+        header_layout.setSpacing(10)
 
         self._toggle_label = QLabel()
         self._toggle_label.setObjectName("folderToggle")
+
+        folder_icon = QLabel()
+        folder_icon.setPixmap(_asset_pixmap("folder_icon.png", 22))
 
         self._name_label = QLabel(folder.name)
         self._name_label.setObjectName("folderName")
@@ -149,23 +222,31 @@ class FolderWidget(QWidget):
         self._count_label = QLabel(f"({len(folder.files)})")
         self._count_label.setObjectName("folderCount")
 
-        rename_btn = QPushButton("Rename")
+        rename_btn = QPushButton()
+        rename_btn.setObjectName("iconButton")
+        rename_btn.setIcon(QIcon(_asset_pixmap("edit_icon.png", 22)))
+        rename_btn.setIconSize(QSize(22, 22))
+        rename_btn.setToolTip("Rename folder")
         rename_btn.clicked.connect(lambda: self.rename_requested.emit(self.folder))
 
-        delete_btn = QPushButton("✕")
+        delete_btn = QPushButton()
+        delete_btn.setObjectName("iconButton")
+        delete_btn.setIcon(QIcon(_asset_pixmap("cancel_icon.png", 22)))
+        delete_btn.setIconSize(QSize(22, 22))
         delete_btn.setToolTip("Delete folder")
         delete_btn.clicked.connect(lambda: self.delete_requested.emit(self.folder))
 
-        header_layout.addWidget(self._toggle_label)
+        header_layout.addWidget(folder_icon)
         header_layout.addWidget(self._name_label)
         header_layout.addWidget(self._count_label)
         header_layout.addStretch()
         header_layout.addWidget(rename_btn)
         header_layout.addWidget(delete_btn)
+        header_layout.addWidget(self._toggle_label)
 
         self._files_container = QWidget()
         self.files_layout = QVBoxLayout(self._files_container)
-        self.files_layout.setContentsMargins(16, 0, 0, 0)
+        self.files_layout.setContentsMargins(28, 0, 0, 0)
         self.files_layout.setSpacing(2)
 
         outer.addWidget(self._header)
@@ -188,7 +269,12 @@ class FolderWidget(QWidget):
     def set_collapsed(self, collapsed: bool) -> None:
         self._collapsed = collapsed
         self._files_container.setVisible(not collapsed)
-        self._toggle_label.setText("▶" if collapsed else "▼")
+        self._toggle_label.setPixmap(
+            _asset_pixmap(
+                "triangle_right_icon.png" if collapsed else "triangle_down_icon.png",
+                22,
+            )
+        )
         self.toggled.emit(self.folder.name, collapsed)
 
 
@@ -201,14 +287,16 @@ class InfoPanel(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(24, 24, 24, 24)
 
         title = QLabel("File Info")
         title.setObjectName("infoTitle")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._header = QLabel("Select a file to view details")
         self._header.setObjectName("infoHeader")
         self._header.setWordWrap(True)
+        self._header.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout.addWidget(title)
         layout.addWidget(self._header)
@@ -231,11 +319,11 @@ class InfoPanel(QWidget):
             value_label.setWordWrap(True)
             value_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
-            row = QHBoxLayout()
-            row.addWidget(name_label)
-            row.addWidget(value_label)
-            row.addStretch()
-            layout.addLayout(row)
+            section = QVBoxLayout()
+            section.setSpacing(2)
+            section.addWidget(name_label)
+            section.addWidget(value_label)
+            layout.addLayout(section)
             self._fields[field] = value_label
 
         layout.addStretch()
@@ -253,7 +341,7 @@ class InfoPanel(QWidget):
         )
         voxel_size = metadata["voxel_size"]
         self._fields["Voxel size"].setText(
-            " ".join(f"{z:g}" for z in voxel_size) if voxel_size else "unknown"
+            " x ".join(f"{z:g}" for z in voxel_size) if voxel_size else "unknown"
         )
         self._fields["Segmented"].setText("Yes" if metadata["segmented"] else "No")
 
@@ -281,7 +369,6 @@ class FileSelectionView(QWidget):
         title.setObjectName("title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        toolbar = QHBoxLayout()
         add_folder_btn = QPushButton("Add Folder")
         new_file_btn = QPushButton("New File")
         back_btn = QPushButton("Back")
@@ -289,11 +376,6 @@ class FileSelectionView(QWidget):
         add_folder_btn.clicked.connect(self._add_folder_request)
         new_file_btn.clicked.connect(self._add_file_request)
         back_btn.clicked.connect(self._viewmodel.go_back)
-
-        toolbar.addWidget(add_folder_btn)
-        toolbar.addWidget(new_file_btn)
-        toolbar.addStretch()
-        toolbar.addWidget(back_btn)
 
         self._folders_scroll = QScrollArea()
         self._folders_scroll.setWidgetResizable(True)
@@ -306,16 +388,27 @@ class FileSelectionView(QWidget):
 
         self._info_panel = InfoPanel()
 
-        root = QHBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
+        content = QHBoxLayout()
+        content.setSpacing(16)
 
         left_column = QVBoxLayout()
         left_column.addWidget(title)
-        left_column.addLayout(toolbar)
         left_column.addWidget(self._folders_scroll, 1)
 
-        root.addLayout(left_column, 2)
-        root.addWidget(self._info_panel, 1)
+        content.addLayout(left_column, 2)
+        content.addWidget(self._info_panel, 1)
+
+        bottom_bar = QHBoxLayout()
+        bottom_bar.setSpacing(16)
+        bottom_bar.addWidget(add_folder_btn, 1)
+        bottom_bar.addWidget(new_file_btn, 1)
+        bottom_bar.addWidget(back_btn, 1)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 24, 24, 24)
+        root.setSpacing(24)
+        root.addLayout(content, 1)
+        root.addLayout(bottom_bar)
 
     @override
     def showEvent(self, a0: QShowEvent | None) -> None:
