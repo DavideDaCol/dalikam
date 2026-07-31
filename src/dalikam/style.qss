@@ -83,3 +83,56 @@ QToolBar QToolButton:hover {
     border: 1px solid #9ac3fe;
     border-radius: 4px;
 }
+
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea > QWidget > QWidget {
+    background: transparent;
+}
+
+QWidget#folderHeader {
+    background-color: #3d4662;
+    border-radius: 8px;
+}
+
+QLabel#folderName {
+    font-weight: 600;
+    font-size: 12pt;
+}
+
+QLabel#folderCount {
+    color: #9ac3fe;
+}
+
+QWidget#fileRow:hover {
+    background-color: #252526;
+    border-radius: 6px;
+}
+
+QWidget#infoPanel {
+    background-color: #252526;
+    border: 1px solid #3d4662;
+    border-radius: 8px;
+}
+
+QLabel#infoTitle {
+    font-size: 16pt;
+    font-weight: bold;
+}
+
+QLabel#infoHeader {
+    font-size: 12pt;
+    font-weight: bold;
+}
+
+QLabel#infoFieldName {
+    color: #9ac3fe;
+    font-weight: 600;
+}
+
+QLabel#infoFieldValue {
+    color: #d5d5d5;
+}

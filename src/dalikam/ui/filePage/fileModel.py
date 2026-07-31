@@ -235,14 +235,6 @@ class FileSelectionModel:
     def set_file_hash(self, path: str, file_hash: str) -> None:
         self._folders.set_file_hash(path, file_hash)
 
-    # --- legacy flat-path API ---
-
-    def get_all_paths(self) -> list[FileInfo]:
-        """Flatten all files across folders, mirroring the old path list."""
+    def get_all_files(self) -> list[FileInfo]:
+        """Flatten every scan across all folders."""
         return [f for folder in self._folders.folders for f in folder.files]
-
-    def insert_path(self, path: str) -> None:
-        """Legacy entry point: add a file to the default folder."""
-        if self._folders.get_folder(DEFAULT_FOLDER_NAME) is None:
-            self._folders.add_folder(DEFAULT_FOLDER_NAME)
-        self._folders.add_file_to_folder(DEFAULT_FOLDER_NAME, path)
