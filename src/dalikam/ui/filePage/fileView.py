@@ -1,10 +1,21 @@
-from typing import override
 from functools import partial
-from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget, QVBoxLayout
-from PyQt6.QtGui import QMouseEvent, QShowEvent
+from typing import override
+
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QMouseEvent, QShowEvent
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 from dalikam.ui.filePage.fileModel import FileInfo
 from dalikam.ui.filePage.fileVM import FileViewModel
+
 
 class FileEntryWidget(QWidget):
     clicked: pyqtSignal = pyqtSignal()
@@ -68,7 +79,7 @@ class FileSelectionView(QWidget):
 
     @override
     def showEvent(self, a0: QShowEvent | None) -> None:
-        self._viewmodel.page_loaded()
+        self._viewmodel.page_refresh()
 
     def path_navigation_request(self) -> None:
         selection_result = QFileDialog.getOpenFileName(self, "Choose a file", "/home", "Imaging Files (*.nii *.nii.gz)")

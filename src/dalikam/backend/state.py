@@ -54,6 +54,27 @@ class StateManager(object):
         """removes all saved paths to OCR scans."""
         self.settings.remove("paths")
 
+    def set_folders(self, folders: list[dict]) -> None:
+        """
+        Persists the virtual folder structure used by the file browser.
+
+        Folders are stored as a list of {"name": str, "files": [dict, ...]} where
+        each file dict mirrors FileInfo's serialized form. QSettings handles
+        nested containers natively, so no manual JSON (de)serialization is needed.
+        """
+        self.settings.setValue("folder_state", folders)
+
+    def get_folders(self) -> list[dict]:
+        """Returns the saved virtual folder structure, or an empty list if unset."""
+        return self.settings.value("folder_state", [], list)
+
+    def delete_folders(self) -> None:
+        """
+        Removes the saved virtual folder structure. This only forgets the
+        organization, it never touches the referenced files on disk.
+        """
+        self.settings.remove("folder_state")
+
     def set_preferred_device(self, device):
         """"saves the preferred inference device (CPU, CUDA, MPS)."""
         self.settings.setValue("preferred_device", device)

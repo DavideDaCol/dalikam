@@ -62,7 +62,10 @@ class SettingsModel:
             shutil.rmtree(predictions_dir)
 
     def delete_scan_paths(self) -> None:
+        # clean files outside folders
         self.settings.delete_raw_files()
+        # clean folder tree
+        self.settings.delete_folders()
 
     def load_model(self, zip_path: Path, model_type_key: str) -> str:
         """Extract a model zip archive into backend/models/<name>/.
