@@ -1,5 +1,6 @@
+from collections.abc import MutableSequence
 from dataclasses import dataclass
-from typing import MutableSequence, override
+from typing import override
 
 import nibabel as nib
 import numpy as np
@@ -292,20 +293,34 @@ class ThreeDSliceView(QWidget):
 
 
     def add_segmentation(self, seg_path: str) -> None:
-        """Loads the raw data from seg_path, then calls the segmentation mesh renderer."""
+        """Loads the raw data from seg_path, then calls the segmentation mesh renderer.
+
+        The volume may have been downsampled during load_model (if it exceeded
+        MAX_VOXELS), so the segmentation is downsampled to the same shape to
+        keep VTK dimensions consistent.
+        """
 
         # load and orient the raw voxel data
         raw_data = nib.load(seg_path).get_fdata(dtype=np.float32)
         raw_data = np.ascontiguousarray(np.transpose(raw_data, (2, 1, 0)).astype(np.int32))
 
         if self._data is not None:
+            # downsample segmentation to match the (possibly downsampled) volume
+            target_shape = self._data.voxels.shape
+            if raw_data.shape != target_shape:
+                factors = (target_shape[0] / raw_data.shape[0],
+                           target_shape[1] / raw_data.shape[1],
+                           target_shape[2] / raw_data.shape[2])
+                raw_data = zoom(raw_data, factors, order=0).astype(np.int32)
+
             self._data.seg_labels = raw_data
             self._render_segmentation()
             self._max_op_sld.setValue(1)
 
     def remove_segmentation(self):
         self.renderer.RemoveViewProp(self._segmentation_actor)
-        self._data.seg_labels = None
+        if self._data is not None:
+            self._data.seg_labels = None
         self._caps = {}
         self._refresh_caps()
         self._max_op_sld.setValue(100)
@@ -395,12 +410,12 @@ class ThreeDSliceView(QWidget):
         if self._data is not None and self._data.seg_labels is not None:
 
             # Stage 1: load the predicted labels into VTK
+            seg_img = vtk.vtkImageData()
+            seg_img.SetDimensions(self._data.dims)
             vtk_arr = numpy_support.numpy_to_vtk(
                 self._data.seg_labels.ravel(), deep=True, array_type=vtk.VTK_INT,
             )
-            seg_img = vtk.vtkImageData()
             seg_img.GetPointData().SetScalars(vtk_arr)
-            seg_img.SetDimensions(self._data.dims)
 
             # get the amount of labels in the segmentation map
             scalars = seg_img.GetPointData().GetScalars()

@@ -10,17 +10,6 @@ from dalikam.tools.utils import generate_label_colors
 from dalikam.ui.filePage.fileModel import FileInfo
 from dalikam.ui.viewerPage.ViewerModel import ViewerModel
 
-def to_names(val: int) -> str:
-    """Maps label values to the respective fluid name"""
-    if val == 1:
-        return "Intraretinal fluid (IRF)"
-    elif val == 2:
-        return "Subretinal fluid (SRF)"
-    elif val == 3:
-        return "Pigment Epithelial Detachment (PED)"
-    else:
-        return "Unknown Label"
-
 class ViewerVM(QObject):
     draw_file: pyqtSignal = pyqtSignal(object)
     labels_changed: pyqtSignal = pyqtSignal(list,list,dict)
@@ -49,7 +38,8 @@ class ViewerVM(QObject):
         self._result_path = result
         labels = ViewerModel.extract_labels_from_nifti(str(result))
         colors = generate_label_colors(labels)
-        named_labels = list(map(to_names,labels))
+        label_map = self._manager.get_label_names()
+        named_labels = [label_map.get(v, f"Label {v}") for v in labels]
         self._model.labels = named_labels
         self.segmentation_ended.emit(result)
         self.labels_changed.emit(self._model.labels, labels, colors)

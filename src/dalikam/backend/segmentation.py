@@ -1,4 +1,5 @@
 import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -194,6 +195,10 @@ class SegmentationManager(QObject):
         else:
             model_folder = Path(__file__).resolve().parents[0] / "models" / "default"
 
+        # persist model folder so that label names can be read from dataset.json
+        # when end_segmentation runs later (worker may still be running)
+        self._model_folder = model_folder
+
         predictions_folder = Path(__file__).resolve().parents[0].joinpath("predictions")
 
         if path.name.endswith('.nii.gz'):
@@ -239,3 +244,22 @@ class SegmentationManager(QObject):
             self.tmp_dir.rmdir()
         if self.final_file is not None:
             self.completed_segmentation.emit(self.final_file)
+
+    def get_label_names(self) -> dict[int, str]:
+        """Parse the model's dataset.json into {label_value: display_name}.
+
+        Falls back to an empty dict if the file is missing or malformed
+        (callers handle that by producing generic "Label N" names).
+        """
+        folder = getattr(self, '_model_folder', None)
+        if not folder:
+            return {}
+        dataset_path = folder / "dataset.json"
+        try:
+            with open(dataset_path) as f:
+                ds = json.load(f)
+            # nnUNet format: {"labels": {"background": 0, "IRF": 1, ...}}
+            # Invert to {value: name} and exclude background (value 0).
+            return {v: k for k, v in ds.get("labels", {}).items() if v != 0}
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            return {}
