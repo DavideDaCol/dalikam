@@ -39,7 +39,7 @@ class ViewerVM(QObject):
     def start_segmentation(self):
         self._manager.run_segmentation(Path(self._model.get_path()))
     
-    def end_segmentation(self, result: Path):
+    def end_segmentation(self, result: Path, model_names: bool = True):
         if not is_valid_segmentation(str(result)):
             show_invalid_segmentation(None)
             return
@@ -52,7 +52,7 @@ class ViewerVM(QObject):
         self._result_path = result
         labels = ViewerModel.extract_labels_from_nifti(str(result))
         colors = generate_label_colors(labels)
-        label_map = self._manager.get_label_names()
+        label_map = self._manager.get_label_names() if model_names else {}
         named_labels = [label_map.get(v, f"Label {v}") for v in labels]
         self._model.labels = named_labels
         self.segmentation_ended.emit(result)
@@ -69,5 +69,5 @@ class ViewerVM(QObject):
 
     def load_external_segmentation(self, path: Path):
         """Load an external segmentation file, reusing the existing pipeline."""
-        self.end_segmentation(path)
+        self.end_segmentation(path, model_names=False)
         self.segmentation_loaded.emit(path)

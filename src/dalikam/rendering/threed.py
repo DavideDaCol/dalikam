@@ -352,8 +352,8 @@ class ThreeDSliceView(QWidget):
         self.renderer.RemoveViewProp(self._segmentation_actor)
         if self._data is not None:
             self._data.seg_labels = None
-        self._caps = {}
-        self._refresh_caps()
+        for cap in self._caps.values():
+            cap[2].VisibilityOff()
         self._max_op_sld.setValue(100)
 
     # ---- RENDERING ----
