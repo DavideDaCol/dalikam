@@ -1,9 +1,10 @@
 from typing import override
 
 from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QIcon, QMouseEvent, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QColorDialog,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -19,12 +20,27 @@ from dalikam.rendering.common import Visualizer
 from dalikam.rendering.loader import VolumeLoadWorker
 from dalikam.rendering.threed import ThreeDSliceView
 from dalikam.rendering.visualizer import SlicerType, SliceView
+from dalikam.tools.utils import get_root
 from dalikam.ui.components.loading_overlay import LoadingOverlay
 from dalikam.ui.viewerPage.viewerVM import ViewerVM
 
 
 def rgb_to_hex(rgb: tuple[float, float, float]) -> str:
     return "#{:02x}{:02x}{:02x}".format(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
+
+
+def _asset_pixmap(name: str, size: int) -> QPixmap:
+    """Load an asset icon from the assets folder, scaled to ``size`` px."""
+    path = get_root() / "assets" / name
+    if not path.exists():
+        return QPixmap()
+    return QPixmap(str(path)).scaled(
+        size,
+        size,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+
 
 
 class SegmentationLabel(QWidget):
@@ -36,6 +52,7 @@ class SegmentationLabel(QWidget):
             color: the color of the label, given as an RGB tuple of values from 0 to 1
     """
     toggle: pyqtSignal = pyqtSignal(int, bool)
+    color_changed: pyqtSignal = pyqtSignal(int, object)
 
     def __init__(self, label_name: str, label_val: int, color: tuple[float, float, float]) -> None:
         super().__init__()
@@ -53,8 +70,27 @@ class SegmentationLabel(QWidget):
         title = QLabel(label_name)
         title.setObjectName("labelTitle")
         layout.addWidget(title)
+
+        self.color_btn = QPushButton()
+        self.color_btn.setObjectName("iconButton")
+        self.color_btn.setIcon(QIcon(_asset_pixmap("color_icon.png", 24)))
+        self.color_btn.setIconSize(QSize(24, 24))
+        self.color_btn.setToolTip("Change label color")
+        self.color_btn.clicked.connect(self.pick_color)
         layout.addStretch()
+        layout.addWidget(self.color_btn)
+
         self.setLayout(layout)
+
+    def pick_color(self):
+        from PyQt6.QtGui import QColor
+        color = QColorDialog.getColor(QColor(self.hex_code), self, "Choose label color")
+        if color.isValid():
+            self.hex_code = color.name()
+            if self.visibility:
+                self.clickable.setStyleSheet(f'background:{self.hex_code}')
+            rgb = (color.redF(), color.greenF(), color.blueF())
+            self.color_changed.emit(self.label_val, rgb)
 
     @override
     def mousePressEvent(self, a0: QMouseEvent | None):
@@ -96,6 +132,7 @@ class SideMenu(QWidget):
     load_segmentation_requested = pyqtSignal()
     remove_segmentation_requested = pyqtSignal()
     toggle_label_requested = pyqtSignal(int, bool)
+    color_change_requested = pyqtSignal(int, object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -221,12 +258,16 @@ class SideMenu(QWidget):
             if color is not None:
                 label = SegmentationLabel(label_names[i], label_values[i], color)
                 label.toggle.connect(self.relay_toggle)
+                label.color_changed.connect(self.relay_color_change)
                 self.label_layout.addWidget(label)
             else:
                 self.label_layout.addWidget(QLabel(label_names[i]))
 
     def relay_toggle(self, label_val: int, visible: bool):
         self.toggle_label_requested.emit(label_val, visible)
+
+    def relay_color_change(self, label_val: int, color: tuple[float, float, float]):
+        self.color_change_requested.emit(label_val, color)
 
 
 class viewerView(QWidget):
@@ -290,6 +331,7 @@ class viewerView(QWidget):
         _ = self.side_menu.load_segmentation_requested.connect(self._on_load_segmentation)
         _ = self.side_menu.remove_segmentation_requested.connect(self._on_remove_segmentation)
         _ = self.side_menu.toggle_label_requested.connect(self._on_toggle_visibility)
+        _ = self.side_menu.color_change_requested.connect(self._on_label_color_change)
 
         self.viewlayout.addWidget(self.side_menu, 1)
         self.viewlayout.addWidget(self.slices, 3)
@@ -407,3 +449,7 @@ class viewerView(QWidget):
     def _on_toggle_visibility(self, label_val: int, visible: bool):
         for view in self.slice_views:
             view.toggle_label_visibility(label_val, visible)
+
+    def _on_label_color_change(self, label_val: int, color: tuple[float, float, float]):
+        for view in self.slice_views:
+            view.update_label_color(label_val, color)

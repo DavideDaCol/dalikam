@@ -506,6 +506,19 @@ class ThreeDSliceView(QWidget):
             self._lut.Modified()
             self.call_render()
 
+    def update_label_color(self, label_val: int, color: tuple[float, float, float]) -> None:
+        """Update the lookup table colors for the given label, preserving visibility."""
+        lut_idx = self._label_lut_lookup.get(label_val)
+        if lut_idx is not None:
+            r, g, b = color
+            mesh_alpha = self._lut.GetTableValue(lut_idx)[3]
+            cap_alpha = self._cap_lut.GetTableValue(lut_idx)[3]
+            self._lut.SetTableValue(lut_idx, r, g, b, mesh_alpha)
+            self._cap_lut.SetTableValue(lut_idx, r, g, b, cap_alpha)
+            self._lut.Modified()
+            self._cap_lut.Modified()
+            self.call_render()
+
     def cleanup(self):
         """Cleanly closes all connections and rendering objects."""
         self.renderer.RemoveAllViewProps()

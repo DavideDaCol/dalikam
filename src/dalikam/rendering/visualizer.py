@@ -302,6 +302,16 @@ class SliceView(QWidget):
             self.lut.Modified()
             self.vtkwidget.GetRenderWindow().Render()
 
+    def update_label_color(self, label_val: int, color: tuple[float, float, float]) -> None:
+        """Update the lookup table color for the given label, preserving its visibility."""
+        lut_idx = self._label_lut_lookup.get(label_val)
+        if lut_idx is not None:
+            alpha = self.lut.GetTableValue(lut_idx)[3]
+            r, g, b = color
+            self.lut.SetTableValue(lut_idx, r, g, b, alpha)
+            self.lut.Modified()
+            self.vtkwidget.GetRenderWindow().Render()
+
     def get_extent(self) -> tuple[int, int]:
         """returns the minimum and maximum index for slices, according to the viewer's orientation"""
         if self.orientation == SlicerType.axial:
