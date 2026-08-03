@@ -490,7 +490,7 @@ class ThreeDSliceView(QWidget):
         self._vtk_widget.GetRenderWindow().Render()
 
     def toggle_label_visibility(self, label_val: int, visible: bool) -> None:
-        """Modifies the lookup table to show or hide the label with the given value."""
+        """Modifies the lookup tables to show or hide the label with the given value."""
 
         colors: MutableSequence[float] = [0.0, 0.0, 0.0]
 
@@ -499,11 +499,14 @@ class ThreeDSliceView(QWidget):
             self._lut.GetColor(lut_idx, colors)
             if visible:
                 self._lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 0.5)
+                self._cap_lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 1.0)
             else:
                 self._lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 0)
+                self._cap_lut.SetTableValue(lut_idx, colors[0], colors[1], colors[2], 0)
 
-            # Tells VTK that the color lookup table got modified
+            # Tells VTK that the color lookup tables got modified
             self._lut.Modified()
+            self._cap_lut.Modified()
             self.call_render()
 
     def update_label_color(self, label_val: int, color: tuple[float, float, float]) -> None:
