@@ -1,5 +1,6 @@
 from collections.abc import MutableSequence
 from dataclasses import dataclass
+import os
 from typing import override
 
 import nibabel as nib
@@ -23,6 +24,7 @@ from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkCommonDataModel import vtkPiecewiseFunction
 from vtkmodules.vtkRenderingCore import vtkActor
 
+from dalikam.rendering.common import verify_segmentation_extents
 from dalikam.tools.utils import label_to_spread_color
 
 MAX_VOXELS = 20_000_000
@@ -44,6 +46,7 @@ class VolumeData:
     dims: tuple  # (X, Y, Z) for vtkImageData.SetDimensions
     signal_onset: float  # noise floor threshold [0, 1]
     affine: np.ndarray  # 4x4 NIfTI affine
+    source_dims: tuple  # (X, Y, Z) of the original scan before downsampling
 
 # ---- HELPER FUNCTIONS ----
 
@@ -264,7 +267,8 @@ class ThreeDSliceView(QWidget):
         """Loads the raw data from the data path inside the VolumeData instance, then calls the volume renderer."""
         affine = nib.load(data).affine
         scan = nib.load(data).get_fdata(dtype=np.float32)
-        
+        source_dims = scan.shape
+
         # intensity normalization: clip the data at the lowest and highest 1%
         lo, hi = np.percentile(scan, 1), np.percentile(scan, 99)
         scan = np.clip(scan, lo, hi)
@@ -272,14 +276,14 @@ class ThreeDSliceView(QWidget):
         if scan.size > MAX_VOXELS:
             factor = (MAX_VOXELS / scan.size) ** (1.0 / 3)
             scan, affine = downsample_volume(scan, affine, factor)
-        
+
         # Rotate volume
         # Nibabel assumes (X,Y,Z) while VTK assumes (Z,Y,X)
         scan = np.ascontiguousarray(np.transpose(scan, (2, 1, 0)))
         dims = (scan.shape[2], scan.shape[1], scan.shape[0])
         onset = noise_floor_heuristic(scan)
         scan_u8 = np.ascontiguousarray((scan * 255).astype(np.uint8))
-        self.load_model_data(VolumeData(scan_u8, None, dims, onset, affine))
+        self.load_model_data(VolumeData(scan_u8, None, dims, onset, affine, source_dims))
 
     def load_model_data(self, data: VolumeData):
         """Sets preloaded VolumeData and builds the VTK rendering pipeline.
@@ -300,11 +304,38 @@ class ThreeDSliceView(QWidget):
         keep VTK dimensions consistent.
         """
 
+        # check that the given path exists on the file system
+        if not os.path.isfile(seg_path):
+            return
+
+        # check that the given file is a NIfTI file
+        if not (seg_path.endswith(".nii") or seg_path.endswith(".nii.gz")):
+            return
+
         # load and orient the raw voxel data
-        raw_data = nib.load(seg_path).get_fdata(dtype=np.float32)
+        try:
+            raw_image = nib.load(seg_path)
+        except Exception:
+            return
+
+        raw_data = raw_image.get_fdata(dtype=np.float32)
+
+        # check that the loaded data is a scalar 3D map
+        if raw_data.ndim != 3:
+            return
+
         raw_data = np.ascontiguousarray(np.transpose(raw_data, (2, 1, 0)).astype(np.int32))
 
         if self._data is not None:
+            # check that the segmentation matches the original scan on every axis
+            source = self._data.source_dims  # (X, Y, Z)
+            seg_shape = raw_data.shape  # (Z, Y, X)
+            if not verify_segmentation_extents(
+                ((0, source[0] - 1), (0, source[1] - 1), (0, source[2] - 1)),
+                ((0, seg_shape[2] - 1), (0, seg_shape[1] - 1), (0, seg_shape[0] - 1)),
+            ):
+                return
+
             # downsample segmentation to match the (possibly downsampled) volume
             target_shape = self._data.voxels.shape
             if raw_data.shape != target_shape:

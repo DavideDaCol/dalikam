@@ -22,6 +22,8 @@ class VolumeLoadWorker(QObject):
             scan = nib.load(self._path).get_fdata(dtype=np.float32)
             self.progress.emit(40)
 
+            source_dims = scan.shape
+
             lo, hi = np.percentile(scan, 1), np.percentile(scan, 99)
             scan = np.clip(scan, lo, hi)
             scan = (scan - lo) / (hi - lo)
@@ -44,7 +46,7 @@ class VolumeLoadWorker(QObject):
 
             scan_u8 = np.ascontiguousarray((scan * 255).astype(np.uint8))
 
-            data = VolumeData(scan_u8, None, dims, onset, affine)
+            data = VolumeData(scan_u8, None, dims, onset, affine, source_dims)
             self.finished.emit(data)
         except Exception as e:
             self.finished.emit(e)

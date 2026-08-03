@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 from typing import override, MutableSequence
 
@@ -9,6 +10,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QSlider, QHBoxLayout, QLabel
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
+from dalikam.rendering.common import verify_segmentation_extents
 from dalikam.tools.utils import label_to_spread_color
 
 
@@ -236,18 +238,32 @@ class SliceView(QWidget):
             3) creates a color table to differentiate all labels
             4) adds the segmentation map to the slicer
         """
+        # check that the given path exists on the file system
+        if not os.path.isfile(seg_path):
+            return
+
+        # check that the given file is a NIfTI file
+        if not (seg_path.endswith((".nii", ".nii.gz"))):
+            return
+
         loader = vtk.vtkNIFTIImageReader()
         loader.SetFileName(seg_path)
         loader.Update()
 
         raw_data = loader.GetOutput()
+
+        # check that the loaded data contains scalar label values
+        if raw_data.GetPointData().GetScalars() is None:
+            return
+
         extents = raw_data.GetExtent()
 
-        # check if extents match
-        if (extents[0], extents[1]) != self.ext_x:
-            print("extents on X axis do not match. terminating segmentation")
+        # check that the segmentation matches the scan on every axis
+        if not verify_segmentation_extents(
+            (self.ext_x, self.ext_y, self.ext_z),
+            ((extents[0], extents[1]), (extents[2], extents[3]), (extents[4], extents[5])),
+        ):
             return
-        # TODO do this for all extents, maybe in separate function
 
         # get the amount of labels in the segmentation map
         scalars = raw_data.GetPointData().GetScalars()
@@ -284,7 +300,6 @@ class SliceView(QWidget):
     def remove_segmentation(self):
         """Remove the segmentation overlay from the renderer."""
         self.renderer.RemoveViewProp(self.seg_slice_actor)
-        self.seg_slice_actor = None
 
 
     def toggle_label_visibility(self, label_val: int, visible: bool) -> None:

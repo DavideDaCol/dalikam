@@ -5,6 +5,11 @@ import shutil
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from dalikam.backend.segmentation import SegmentationManager
+from dalikam.rendering.common import (
+    is_valid_segmentation,
+    segmentation_matches_scan,
+    show_invalid_segmentation,
+)
 from dalikam.router.router import Router
 from dalikam.tools.utils import generate_label_colors
 from dalikam.ui.filePage.fileModel import FileInfo
@@ -35,6 +40,15 @@ class ViewerVM(QObject):
         self._manager.run_segmentation(Path(self._model.get_path()))
     
     def end_segmentation(self, result: Path):
+        if not is_valid_segmentation(str(result)):
+            show_invalid_segmentation(None)
+            return
+
+        scan_path = self._model.get_path()
+        if scan_path and not segmentation_matches_scan(scan_path, str(result)):
+            show_invalid_segmentation(None)
+            return
+
         self._result_path = result
         labels = ViewerModel.extract_labels_from_nifti(str(result))
         colors = generate_label_colors(labels)
