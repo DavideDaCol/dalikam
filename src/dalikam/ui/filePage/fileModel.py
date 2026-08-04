@@ -35,7 +35,7 @@ class FileInfo:
 
         stat = os.stat(self.path)
         timezone = datetime.now().astimezone().tzinfo
-        self.creation_date = datetime.fromtimestamp(stat.st_birthtime, timezone)
+        self.creation_date = datetime.fromtimestamp(getattr(stat, "st_birthtime", stat.st_ctime), timezone)
         self.last_mod_date = datetime.fromtimestamp(stat.st_mtime, timezone)
         self.size = stat.st_size
         # Nanosecond mtime is stored verbatim to validate the cached hash on
