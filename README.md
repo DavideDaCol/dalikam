@@ -68,7 +68,7 @@ cd dalikam
 
 ### 2. Install project dependencies
 ```bash
-git submodules update --init --recursive
+git submodule update --init --recursive
 uv sync
 ```
 
