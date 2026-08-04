@@ -36,6 +36,8 @@ class SettingsView(QWidget):
         model_type_values = list(MODEL_TYPE_KEYS.values())
         if saved_type in model_type_values:
             self.model_dropdown.setCurrentIndex(model_type_values.index(saved_type))
+        else:
+            self._viewmodel.set_preferred_model_type(model_type_values[self.model_dropdown.currentIndex()])
 
         load_model = QPushButton("Load Model Weights")
         load_model.clicked.connect(self._on_load_model)

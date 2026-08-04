@@ -29,6 +29,22 @@ def build_nnunet_name(path: Path, file_hash: str) -> str:
     renamed = re.sub(".nii.gz", "_" + file_hash + "_0000.nii.gz", file_name)
     return renamed
 
+
+def find_loaded_model_folder() -> Path:
+    """Locate a usable nnUNet model inside backend/models/.
+
+    Returns the first directory (sorted by name) that contains dataset.json and plans.json. Raises if none.
+    """
+    models_dir = Path(__file__).resolve().parents[0] / "models"
+    candidates = [
+        d
+        for d in sorted(models_dir.iterdir())
+        if d.is_dir() and (d / "dataset.json").is_file() and (d / "plans.json").is_file()
+    ]
+    if not candidates:
+        raise FileNotFoundError(f"No valid nnUNet model found under {models_dir}")
+    return candidates[0]
+
 class InferenceProgressWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -193,7 +209,7 @@ class SegmentationManager(QObject):
         if saved_model_path:
             model_folder = Path(saved_model_path)
         else:
-            model_folder = Path(__file__).resolve().parents[0] / "models" / "default"
+            model_folder = find_loaded_model_folder()
 
         # persist model folder so that label names can be read from dataset.json
         # when end_segmentation runs later (worker may still be running)
