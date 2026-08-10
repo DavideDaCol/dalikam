@@ -213,7 +213,7 @@ class SliceView(QWidget):
             # Looking down Z axis
             camera.SetPosition(center[0], center[1], center[2] + distance)
             camera.SetFocalPoint(center[0], center[1], center[2])
-            camera.SetViewUp(0, 1, 0)
+            camera.SetViewUp(0, -1, 0)
 
         elif self.orientation == SlicerType.coronal:
             # Looking down Y axis
