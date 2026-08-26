@@ -97,7 +97,7 @@ Both NIfTI 1 and NIfTI 2 files are supported.
 
 ### Running Segmentation
 
-- The app is distributed under a "Bring your own Weights" philosophy. Please look [here](https://example.com) for details;
+- The app is distributed under a "Bring your own Weights" philosophy, contact Università di Trento to request access to the model weights;
 - Once you have obtained the model weights, which should be packaged as a .zip archive, open Dalikam and open the settings
 - Still in the settings menu, choose your preferred inference model using the appropriate dropdown (3D low-res / 3d full-res / 2d) and press the load weights button;
 - Segmentation inference will then be available inside of the application after opening a file.
@@ -149,18 +149,12 @@ The trained models will segment the image looking for the presence of some or al
 
 ## Limitations
 - The project is currently still being built, many features are missing and breaking changes are to be expected.
-- The application has not been validated for usage on MacOS and no official testing pipeline has been set up yet.
 - Currently, only the nnUNet inference engine is correctly integrated, because SamED has had some platform-dependent issues.
 - Cloud-based inference is not supported for privacy concerns: a GPU is required for inference.
 
 ## Future Improvements / TODOs
-- style the file selector
-- add custom color selection for the labels
-- official testing pipeline
-- full release pipeline
-
-## References
-[TBD]
+- add official testing pipeline
+- build a CI/CD pipeline for packaging releases
 
 ## License
 
