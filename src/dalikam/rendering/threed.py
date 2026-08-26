@@ -25,6 +25,7 @@ from vtkmodules.vtkCommonDataModel import vtkPiecewiseFunction
 from vtkmodules.vtkRenderingCore import vtkActor
 
 from dalikam.rendering.common import verify_segmentation_extents
+from dalikam.tools.load_timer import FrameTracker
 from dalikam.tools.utils import label_to_spread_color
 
 MAX_VOXELS = 20_000_000
@@ -108,6 +109,8 @@ class ThreeDSliceView(QWidget):
         self._cap_lut = vtk.vtkLookupTable()
         self._caps = {}
 
+        self._tracker = FrameTracker()
+
         #Initialize axis sliders
         self._x_min_sld = QSlider()
         self._x_max_sld = QSlider()
@@ -150,6 +153,11 @@ class ThreeDSliceView(QWidget):
         interactor.SetDesiredUpdateRate(30.0)
         interactor.SetStillUpdateRate(0.0001)
 
+        self._vtk_widget.installEventFilter(self)
+        self._vtk_widget.GetRenderWindow().AddObserver(
+            "RenderEvent", self._on_render,
+        )
+
         # add axes actor as a frame of reference in 3D space
         axes = vtk.vtkAxesActor()
         self._orientation = vtk.vtkOrientationMarkerWidget()
@@ -158,6 +166,42 @@ class ThreeDSliceView(QWidget):
         self._orientation.EnabledOn()
         self._orientation.SetInteractive(0)
         self._orientation.SetViewport(0.0, 0.0, 0.15, 0.15)
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent, QTimer
+        if obj is self._vtk_widget:
+            t = event.type()
+            if t in (QEvent.Type.MouseButtonPress, QEvent.Type.Wheel):
+                if not self._tracker._active:
+                    self._tracker.begin()
+                if t == QEvent.Type.Wheel:
+                    self._reset_scroll_timer()
+            elif t == QEvent.Type.MouseButtonRelease:
+                self._end_interaction()
+        return super().eventFilter(obj, event)
+
+    def _reset_scroll_timer(self):
+        from PyQt6.QtCore import QTimer
+        if not hasattr(self, "_scroll_timer"):
+            self._scroll_timer = QTimer()
+            self._scroll_timer.setSingleShot(True)
+            self._scroll_timer.setInterval(500)
+            self._scroll_timer.timeout.connect(self._end_interaction)
+        self._scroll_timer.start()
+
+    def _on_render(self, _obj=None, _event=None):
+        self._tracker.record_frame()
+
+    def _end_interaction(self):
+        metrics = self._tracker.end()
+        if metrics is not None:
+            print(
+                f"3D renderer FPS: avg={metrics['avg_fps']:.1f}"
+                f"  1% low={metrics['1pct_low_fps']:.1f}"
+                f"  frames={metrics['frames']}"
+                f"  duration={metrics['duration_ms']:.0f}ms",
+                flush=True,
+            )
 
     # ---- UI INITIALIZATION ----
 
@@ -181,6 +225,8 @@ class ThreeDSliceView(QWidget):
         # initial value, this will then be modified after the volume is loaded
         self._onset_sld.setValue(0)
         self._onset_sld.valueChanged.connect(self._on_opacity_changed)
+        self._onset_sld.sliderPressed.connect(self._tracker.begin)
+        self._onset_sld.sliderReleased.connect(self._end_interaction)
         row.addWidget(self._onset_sld)
 
         # Max opacity slider, sets the level of transparency of the volume
@@ -192,6 +238,8 @@ class ThreeDSliceView(QWidget):
         # Initially view model at 100% opacity (reduced to 1% when segmentation loads)
         self._max_op_sld.setValue(100)
         self._max_op_sld.valueChanged.connect(self._on_opacity_changed)
+        self._max_op_sld.sliderPressed.connect(self._tracker.begin)
+        self._max_op_sld.sliderReleased.connect(self._end_interaction)
         row.addWidget(self._max_op_sld)
 
         return row
@@ -212,6 +260,8 @@ class ThreeDSliceView(QWidget):
         min_sld.setRange(0, default_max)
         min_sld.setValue(0)
         min_sld.valueChanged.connect(self._on_plane_changed)
+        min_sld.sliderPressed.connect(self._tracker.begin)
+        min_sld.sliderReleased.connect(self._end_interaction)
 
         # maximum slice slider: sets the ending slice, all the following slices are not rendered
         max_lbl = QLabel(str(default_max))
@@ -220,6 +270,8 @@ class ThreeDSliceView(QWidget):
         max_sld.setRange(0, default_max)
         max_sld.setValue(default_max)
         max_sld.valueChanged.connect(self._on_plane_changed)
+        max_sld.sliderPressed.connect(self._tracker.begin)
+        max_sld.sliderReleased.connect(self._end_interaction)
 
         row.addWidget(min_lbl)
         row.addWidget(min_sld, 1)
@@ -421,6 +473,7 @@ class ThreeDSliceView(QWidget):
             actor.SetMapper(mapper)
             actor.SetProperty(prop)
             actor.SetUserMatrix(affine_to_vtk_matrix(self._data.affine))
+            actor.SetScale(3.0,3.0,1.0)
 
             self._volume_actor = actor
             self._volume_mapper = mapper
