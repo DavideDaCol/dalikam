@@ -27,15 +27,15 @@ Dalikam is part of a thesis project regarding the development of desktop applica
 
 ### Main Interface
 
-[TBD]
+![File selector](https://i.ibb.co/kgnQJMkX/results-file-added.png)
 
 ### Visualization View
 
-[TBD]
+![Visualization](https://i.ibb.co/4nMVxfdP/results-scan-3d.png)
 
 ### Segmentation Output
 
-[TBD]
+![Segmentation](https://i.ibb.co/JwnQJ0xc/results-segment-3d.png)
 
 ---
 
